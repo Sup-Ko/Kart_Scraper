@@ -57,5 +57,16 @@ def test_parse_weights():
     assert w == {"price": 0.5, "distance": 0.3, "quality": 0.2}
 
 
+def test_price_scored_on_eur_equivalent():
+    # 3000 USD (~2760 EUR) is cheaper than 2900 EUR once converted, so with a
+    # price-only weighting it must win despite the larger raw number.
+    usd = _l(title="usd", price=3000, currency="USD")
+    eur = _l(title="eur", price=2900, currency="EUR")
+    ranked = score_listings([eur, usd], {"price": 1.0})
+    assert ranked[0] is usd
+    assert usd.subscores["price"] == 1.0
+    assert eur.subscores["price"] == 0.0
+
+
 def test_empty_input():
     assert score_listings([], DEFAULT_WEIGHTS) == []

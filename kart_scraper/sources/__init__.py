@@ -8,17 +8,25 @@ continues with whatever the others returned.
 
 from __future__ import annotations
 
+from .anibis import AnibisSource
 from .base import BaseSource
 from .ebay import EbaySource
 from .google import GoogleSource
 from .leboncoin import LeboncoinSource
+from .racertrader import RacerTraderSource
+from .racingjunk import RacingJunkSource
 from .sample import SampleSource
 from .twomemain import TwoMeMainSource
 
-# Registry of selectable sources, in default run order.
+# Registry of selectable sources, in default run order. Specialized kart
+# marketplaces and the main classifieds run first (most on-target), then the
+# broader general sources, with the offline sample last.
 SOURCES: dict[str, type[BaseSource]] = {
-    EbaySource.name: EbaySource,
     LeboncoinSource.name: LeboncoinSource,
+    AnibisSource.name: AnibisSource,
+    RacerTraderSource.name: RacerTraderSource,
+    RacingJunkSource.name: RacingJunkSource,
+    EbaySource.name: EbaySource,
     GoogleSource.name: GoogleSource,
     TwoMeMainSource.name: TwoMeMainSource,
     SampleSource.name: SampleSource,

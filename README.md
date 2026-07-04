@@ -14,8 +14,9 @@ score that blends **price**, **distance**, **listing quality** and
 location ─▶ geocode ─┐
 query ────▶ sources ─┼─▶ merge + dedupe ─▶ score (weighted) ─▶ table / CSV / HTML
                      │
-        ┌────────────┴────────────┐
-      eBay   Leboncoin  Google  2ememain   (+ offline "sample")
+        ┌────────────┴───────────────────────────────┐
+   Leboncoin  Anibis  RacerTrader  RacingJunk  eBay  Google  2ememain
+                              (+ offline "sample")
 ```
 
 Each source is an isolated plugin: if one site is down, changes its markup, or
@@ -69,15 +70,26 @@ Weights are configurable with `--weights`.
 
 ## Sources
 
-| Source      | Tech                | Notes                                              |
-|-------------|---------------------|----------------------------------------------------|
-| `ebay`      | requests + bs4      | Most reliable; exposes item location.              |
-| `leboncoin` | Playwright          | FR classifieds; DataDome-protected, best-effort.   |
-| `google`    | Playwright          | Google Shopping vertical; anti-bot, best-effort.   |
-| `2ememain`  | Playwright          | BE/NL classifieds (Adevinta), best-effort.         |
-| `sample`    | bundled fixtures    | Offline demo/test data; opt-in via `-s sample`.    |
+| Source        | Tech            | Notes                                                   |
+|---------------|-----------------|---------------------------------------------------------|
+| `leboncoin`   | Playwright      | FR classifieds; DataDome-protected, best-effort.        |
+| `anibis`      | Playwright      | Swiss classifieds (CHF); best-effort.                   |
+| `racertrader` | Playwright      | **Specialized** race-kart marketplace (UK/EU, GBP).     |
+| `racingjunk`  | Playwright      | **Specialized** racing classifieds, karts category (USD).|
+| `ebay`        | requests + bs4  | Most reliable; exposes item location.                   |
+| `google`      | Playwright      | Google Shopping vertical; anti-bot, best-effort.        |
+| `2ememain`    | Playwright      | BE/NL classifieds (Adevinta), best-effort.              |
+| `sample`      | bundled fixtures| Offline demo/test data; opt-in via `-s sample`.         |
 
 `--source all` (the default) runs every live source, but **not** `sample`.
+
+### Currencies
+
+Sources report prices in their native currency (EUR, CHF, GBP, USD). Listings
+are always **displayed** in their original currency, but the price sub-score
+ranks them on an **approximate EUR-equivalent** (`kart_scraper/money.py`) so a
+€2,900 kart and a $3,000 kart are compared fairly. Adjust the static rates in
+`money.py` if you need precision.
 
 ## Add a new source
 

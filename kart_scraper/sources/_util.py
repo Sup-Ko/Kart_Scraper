@@ -5,21 +5,22 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-_PRICE_RE = re.compile(r"(\d[\d\s.,]*)")
+_PRICE_RE = re.compile(r"(\d[\d\s.,'’]*)")
 
 
 def parse_price(text: Optional[str]) -> Optional[float]:
     """Extract a numeric price from messy marketplace text.
 
-    Handles both ``1 299,00 €`` (European) and ``$1,299.00`` (US) groupings.
-    Returns ``None`` when no plausible number is found.
+    Handles European ``1 299,00 €``, US ``$1,299.00`` and Swiss ``2'500.-``
+    groupings. Returns ``None`` when no plausible number is found.
     """
     if not text:
         return None
     match = _PRICE_RE.search(text.replace("\xa0", " "))
     if not match:
         return None
-    raw = match.group(1).strip().replace(" ", "")
+    # Apostrophes are Swiss thousands separators (2'500 -> 2500); drop them.
+    raw = match.group(1).strip().replace(" ", "").replace("'", "").replace("’", "")
     # Decide which symbol is the decimal separator.
     if "," in raw and "." in raw:
         # The right-most separator is the decimal one.

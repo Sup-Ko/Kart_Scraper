@@ -1,7 +1,9 @@
 from pathlib import Path
 
-from kart_scraper.sources import get_sources
+from kart_scraper.sources import LIVE_SOURCES, get_sources
+from kart_scraper.sources.anibis import AnibisSource
 from kart_scraper.sources.ebay import EbaySource
+from kart_scraper.sources.racertrader import RacerTraderSource
 from kart_scraper.sources.sample import SampleSource
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -20,6 +22,32 @@ def test_ebay_parse_fixture():
     assert first.image_count == 1
 
 
+def test_anibis_parse_fixture():
+    html = (FIXTURES / "anibis_results.html").read_text(encoding="utf-8")
+    listings = AnibisSource().parse(html)
+    assert len(listings) == 2  # anchors deduped against their card wrappers
+    first = listings[0]
+    assert first.title == "Kart Tony Kart Rotax"
+    assert first.price == 2500.0  # Swiss "2'500.-" parsed correctly
+    assert first.currency == "CHF"
+    assert first.location == "Genève"
+    assert first.url == "https://www.anibis.ch/fr/vi/kart-tony-12345"
+    assert first.image_count == 2
+
+
+def test_racertrader_parse_fixture():
+    html = (FIXTURES / "racertrader_results.html").read_text(encoding="utf-8")
+    listings = RacerTraderSource().parse(html)
+    assert len(listings) == 2
+    first = listings[0]
+    assert first.title == "Tony Kart OTK 2020"
+    assert first.price == 3200.0
+    assert first.currency == "GBP"
+    assert first.url == "https://www.racertrader.com/listing/tony-kart-999"
+    # Absolute URL in the fixture is kept as-is.
+    assert listings[1].url == "https://www.racertrader.com/listing/exprit-888"
+
+
 def test_sample_source_loads():
     listings = SampleSource().fetch("kart", None, 100, None)
     assert len(listings) >= 5
@@ -29,8 +57,11 @@ def test_sample_source_loads():
 
 def test_get_sources_all_excludes_sample():
     names = [s.name for s in get_sources(["all"])]
-    assert "ebay" in names and "leboncoin" in names
+    # New sources are wired into the default "all" run.
+    for expected in ("ebay", "leboncoin", "anibis", "racertrader", "racingjunk"):
+        assert expected in names
     assert "sample" not in names
+    assert set(names) == set(LIVE_SOURCES)
 
 
 def test_get_sources_explicit_and_dedupe():

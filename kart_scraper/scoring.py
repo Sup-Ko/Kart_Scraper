@@ -13,6 +13,7 @@ import re
 from typing import Iterable, Optional
 
 from .models import Listing
+from .money import to_eur
 
 # Spec keywords that signal a richer, more trustworthy listing.
 _SPEC_KEYWORDS = ("year", "annee", "année", "engine", "moteur", "rotax", "iame",
@@ -66,13 +67,15 @@ def score_listings(
     if not items:
         return items
 
-    prices = [l.price for l in items]
+    # Normalize price on the EUR-equivalent so listings in different currencies
+    # (CHF/GBP/USD) are compared fairly; display keeps the original currency.
+    prices = [to_eur(l.price, l.currency) for l in items]
     distances = [l.distance_km for l in items]
 
     total_weight = sum(weights.values()) or 1.0
 
     for listing in items:
-        price_s = _normalize_lower_better(listing.price, prices)
+        price_s = _normalize_lower_better(to_eur(listing.price, listing.currency), prices)
         distance_s = _normalize_lower_better(listing.distance_km, distances)
         # Hard penalty for listings known to be outside the requested radius.
         if radius_km is not None and listing.distance_km is not None:

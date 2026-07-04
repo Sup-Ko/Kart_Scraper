@@ -10,6 +10,7 @@ from typing import Optional
 from ..config import RATE_LIMIT_SECONDS
 from ..geocode import Coordinates, Geocoder, distance_km
 from ..models import Listing
+from ..money import to_eur
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +58,10 @@ class BaseSource(abc.ABC):
         enriched: list[Listing] = []
         for listing in listings:
             listing.source = listing.source or self.name
-            if max_price is not None and listing.price is not None and listing.price > max_price:
+            # Compare against max_price on the EUR-equivalent so the filter is
+            # consistent across sources priced in different currencies.
+            price_eur = to_eur(listing.price, listing.currency)
+            if max_price is not None and price_eur is not None and price_eur > max_price:
                 continue
             if geocoder is not None and listing.lat is None and listing.location:
                 coords = geocoder.geocode(listing.location)

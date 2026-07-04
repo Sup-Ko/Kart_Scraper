@@ -13,10 +13,11 @@ venv/
 .coverage
 htmlcov/
 
-# Tool output
+# Tool output (generated reports in the working dir), but keep bundled/test assets
 *.csv
 *.html
 !kart_scraper/data/report_template.html
+!tests/fixtures/*.html
 
 # Caches
 .cache/

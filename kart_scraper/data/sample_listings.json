@@ -1,0 +1,68 @@
+[
+  {
+    "title": "Karting Tony Kart Rotax Max 2019 - excellent état",
+    "url": "https://example.com/sample/tonykart-rotax-2019",
+    "price": 2800,
+    "currency": "EUR",
+    "location": "Lyon, France",
+    "posted_date": "2026-06-25",
+    "image_count": 6,
+    "description": "Chassis Tony Kart 2019, moteur Rotax Max, peu servi, carrosserie neuve, pneus récents. Révision complète effectuée. Idéal compétition club.",
+    "specs": {"year": "2019", "engine": "Rotax", "chassis": "Tony Kart"}
+  },
+  {
+    "title": "Kart CRG enfant Mini 60cc",
+    "url": "https://example.com/sample/crg-mini-60",
+    "price": 1500,
+    "currency": "EUR",
+    "location": "Villeurbanne, France",
+    "posted_date": "2026-06-10",
+    "image_count": 3,
+    "description": "Kart CRG pour enfant, moteur 60cc, bon état général.",
+    "specs": {"engine": "60cc", "chassis": "CRG"}
+  },
+  {
+    "title": "Go-kart loisir à vendre",
+    "url": "https://example.com/sample/gokart-loisir",
+    "price": 900,
+    "currency": "EUR",
+    "location": "Grenoble, France",
+    "posted_date": "2026-04-02",
+    "image_count": 1,
+    "description": "Kart de loisir, fonctionne bien.",
+    "specs": {}
+  },
+  {
+    "title": "Châssis Birel ART + moteur IAME X30 2021",
+    "url": "https://example.com/sample/birel-iame-x30",
+    "price": 4200,
+    "currency": "EUR",
+    "location": "Saint-Étienne, France",
+    "posted_date": "2026-06-20",
+    "image_count": 8,
+    "description": "Ensemble complet Birel ART avec moteur IAME X30 de 2021, données télémétrie incluses, nombreux consommables neufs. Châssis très sain.",
+    "specs": {"year": "2021", "engine": "IAME X30", "chassis": "Birel ART"}
+  },
+  {
+    "title": "Kart Sodikart occasion",
+    "url": "https://example.com/sample/sodikart-occasion",
+    "price": 2100,
+    "currency": "EUR",
+    "location": "Paris, France",
+    "posted_date": "2026-05-15",
+    "image_count": 4,
+    "description": "Sodikart en bon état, moteur Honda GX390, parfait pour piste de loisir.",
+    "specs": {"engine": "Honda", "chassis": "Sodikart"}
+  },
+  {
+    "title": "Karting complet débutant - prix négociable",
+    "url": "https://example.com/sample/karting-debutant",
+    "price": 1200,
+    "currency": "EUR",
+    "location": "Chambéry, France",
+    "posted_date": "2026-06-27",
+    "image_count": 5,
+    "description": "Kart complet idéal débutant, châssis sain, moteur révisé récemment, équipement de protection offert.",
+    "specs": {"engine": "révisé"}
+  }
+]

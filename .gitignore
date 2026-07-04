@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Tool output (generated reports in the working dir), but keep bundled/test assets
+*.csv
+*.html
+!kart_scraper/data/report_template.html
+!tests/fixtures/*.html
+
+# Caches
+.cache/

@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal Desk</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --text: #e7e9ee;
+    --muted: #9aa3b2; --border: #2a2f3a; --accent: #6ea8fe;
+    --hot: #ff5c5c; --warm: #ffa94d; --cool: #4dd4c0; --cold: #4a5468;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f0f2f5; --text: #1a1d24;
+      --muted: #5c6472; --border: #e0e3e9; --accent: #2563eb;
+      --hot: #e03131; --warm: #e8590c; --cool: #0ca678; --cold: #adb5bd;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+  h1 .dot { color: var(--hot); }
+  .meta { color: var(--muted); font-size: 13px; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 32px 0 12px; }
+  .grid { overflow-x: auto; }
+  table.heat { border-collapse: collapse; width: 100%; min-width: 520px; }
+  table.heat th, table.heat td { padding: 8px 10px; text-align: center; border: 1px solid var(--border); font-size: 13px; }
+  table.heat th:first-child, table.heat td:first-child { text-align: left; font-weight: 600; }
+  .cell { border-radius: 4px; padding: 4px 8px; display: inline-block; min-width: 34px; color: #0b0d10; font-weight: 600; }
+  .band-hot { background: var(--hot); } .band-warm { background: var(--warm); }
+  .band-cool { background: var(--cool); } .band-cold { background: var(--cold); color: var(--text); opacity: .55; }
+  .empty { color: var(--muted); opacity: .4; }
+  .rail { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 12px 14px; }
+  .card.band-hot { border-left-color: var(--hot); } .card.band-warm { border-left-color: var(--warm); }
+  .card.band-cool { border-left-color: var(--cool); } .card.band-cold { border-left-color: var(--cold); }
+  .card a { color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; }
+  .card a:hover { color: var(--accent); }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .tag { background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+  .tag.self { color: var(--accent); border-color: var(--accent); }
+  .heatpill { font-weight: 700; }
+  .list { list-style: none; padding: 0; margin: 0; }
+  .list li { border-bottom: 1px solid var(--border); padding: 10px 0; display: flex; gap: 12px; align-items: baseline; }
+  .list li .score { flex: 0 0 46px; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .list li a { color: var(--text); text-decoration: none; }
+  .list li a:hover { color: var(--accent); }
+  .list .sub { color: var(--muted); font-size: 12px; }
+  .cols { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  @media (min-width: 780px) { .cols { grid-template-columns: 1fr 1fr; gap: 24px; } }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Signal Desk<span class="dot">.</span></h1>
+    <span class="meta">{{ total }} items &middot; generated {{ generated }}</span>
+  </header>
+
+  <h2>🔥 Hottest right now</h2>
+  <div class="rail">
+    {% for r in hottest %}
+    <div class="card band-{{ r.heat | band }}">
+      <a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title }}</a>
+      <div class="sub">
+        <span class="tag {{ 'self' if r.channel == 'self' else '' }}">{{ r.topic }}</span>
+        <span class="heatpill">{{ r.heat }}</span>
+        <span>{{ r.source }}</span>
+        <span>{{ (r.published or r.collected_at) | age }}</span>
+      </div>
+    </div>
+    {% else %}
+    <p class="meta">No items yet. Run <code>signal-desk collect</code> first.</p>
+    {% endfor %}
+  </div>
+
+  <h2>🗺️ Heat map — topic × recency</h2>
+  <div class="grid">
+    <table class="heat">
+      <thead>
+        <tr><th>Topic</th>{% for b in buckets %}<th>{{ b }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for topic in topics %}
+        <tr>
+          <td>{{ topic }}</td>
+          {% for b in buckets %}
+          {% set cell = grid[topic][b] %}
+          <td>
+            {% if cell.count %}
+            <span class="cell band-{{ cell.max_heat | band }}">{{ cell.count }}</span>
+            {% else %}<span class="empty">·</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2>👤 About you</h2>
+      <ul class="list">
+        {% for r in self_items %}
+        <li>
+          <span class="score" style="color: var(--{{ r.heat | band }})">{{ r.heat }}</span>
+          <span>
+            <a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title }}</a>
+            <div class="sub">{{ r.topic }} &middot; {{ r.source }} &middot; {{ (r.published or r.collected_at) | age }}</div>
+          </span>
+        </li>
+        {% else %}
+        <li class="sub">Nothing about you surfaced yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div>
+      <h2>🌐 Topics</h2>
+      <ul class="list">
+        {% for r in topic_items %}
+        <li>
+          <span class="score" style="color: var(--{{ r.heat | band }})">{{ r.heat }}</span>
+          <span>
+            <a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.title }}</a>
+            <div class="sub">{{ r.topic }} &middot; {{ r.source }} &middot; {{ (r.published or r.collected_at) | age }}</div>
+          </span>
+        </li>
+        {% else %}
+        <li class="sub">No topic items yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <footer>
+    Signal Desk collects only public feeds and your own accounts. Keep it that way.
+  </footer>
+</div>
+</body>
+</html>

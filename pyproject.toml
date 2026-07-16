@@ -23,9 +23,10 @@ dev = ["pytest>=8.0"]
 
 [project.scripts]
 kart-scraper = "kart_scraper.cli:main"
+signal-desk = "signal_desk.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["kart_scraper*"]
+include = ["kart_scraper*", "signal_desk*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

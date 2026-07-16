@@ -17,7 +17,13 @@ htmlcov/
 *.csv
 *.html
 !kart_scraper/data/report_template.html
+!signal_desk/data/dashboard_template.html
 !tests/fixtures/*.html
+
+# Signal Desk local data (personal — never commit)
+signaldesk.db
+signaldesk.config.json
+dashboard.html
 
 # Caches
 .cache/

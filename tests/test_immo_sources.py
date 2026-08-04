@@ -88,6 +88,13 @@ def test_search_applies_filters():
         assert l.surface_m2 >= 60
 
 
+def test_search_max_rooms_keeps_studios():
+    src = SampleSource()
+    results = src.search(center=None, radius_km=12, max_rooms=1.5, geocoder=None)
+    assert results  # the bundled data contains studios
+    assert all(l.rooms <= 1.5 for l in results)
+
+
 def test_geocodable_anchors_to_geneva():
     assert SampleSource._geocodable("Champel") == "Champel, Genève, Suisse"
     assert (SampleSource._geocodable("Rue de Berne, 1201 Genève")

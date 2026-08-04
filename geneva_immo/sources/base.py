@@ -41,6 +41,7 @@ class BaseSource(abc.ABC):
         radius_km: float,
         max_price: Optional[float] = None,
         min_rooms: Optional[float] = None,
+        max_rooms: Optional[float] = None,
         min_surface: Optional[float] = None,
         geocoder: Optional[Geocoder] = None,
     ) -> list[ApartmentListing]:
@@ -61,6 +62,8 @@ class BaseSource(abc.ABC):
             if max_price is not None and listing.price is not None and listing.price > max_price:
                 continue
             if min_rooms is not None and listing.rooms is not None and listing.rooms < min_rooms:
+                continue
+            if max_rooms is not None and listing.rooms is not None and listing.rooms > max_rooms:
                 continue
             if (min_surface is not None and listing.surface_m2 is not None
                     and listing.surface_m2 < min_surface):

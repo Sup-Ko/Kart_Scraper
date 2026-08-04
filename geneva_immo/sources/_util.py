@@ -11,6 +11,7 @@ from kart_scraper.sources._util import clean_text, parse_price  # noqa: F401
 
 _ROOMS_RE = re.compile(
     r"(\d{1,2}(?:[.,]\d)?)\s*(?:pi[eè]ces?|pces?|rooms?|zimmer|zi\b)", re.IGNORECASE)
+_STUDIO_RE = re.compile(r"\bstudios?\b", re.IGNORECASE)
 _SURFACE_RE = re.compile(
     r"(\d{2,4}(?:[.,]\d{1,2})?)\s*m(?:²|2\b)", re.IGNORECASE)
 
@@ -20,13 +21,15 @@ def parse_rooms(text: Optional[str]) -> Optional[float]:
 
     Handles the unicode half fraction (``"2½ pièces"``) and returns ``None``
     when no plausible count is found. Values above 20 are rejected as parsing
-    noise (surface figures, street numbers, …).
+    noise (surface figures, street numbers, …). Listings advertised as a
+    "studio" without an explicit count are Swiss 1-piece flats, so they count
+    as 1.0 — otherwise studios would be invisible to room filters.
     """
     if not text:
         return None
     match = _ROOMS_RE.search(text.replace("½", ".5"))
     if not match:
-        return None
+        return 1.0 if _STUDIO_RE.search(text) else None
     value = float(match.group(1).replace(",", "."))
     return value if 0 < value <= 20 else None
 

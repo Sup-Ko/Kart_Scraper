@@ -103,6 +103,21 @@
     "features": {}
   },
   {
+    "title": "Studio traversant avec cachet — Jonction",
+    "url": "https://example.com/annonces/jonction-studio-1009",
+    "price": 430000,
+    "currency": "CHF",
+    "location": "Rue des Deux-Ponts, 1205 Genève",
+    "rooms": 1.0,
+    "surface_m2": 24,
+    "floor": "3e",
+    "year_built": 1930,
+    "posted_date": "2026-07-30",
+    "image_count": 5,
+    "description": "Studio de caractère dans un immeuble 1930 à la Jonction, parquet d'origine et hauts plafonds. Proche du Rhône, de l'Arve et des transports. Charges modérées.",
+    "features": {"cachet": "yes"}
+  },
+  {
     "title": "Prestigieux 6,5 pièces vue lac — Cologny",
     "url": "https://example.com/annonces/cologny-6p5-1008",
     "price": 3900000,

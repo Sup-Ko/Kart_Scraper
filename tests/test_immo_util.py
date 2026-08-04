@@ -18,8 +18,17 @@ def test_parse_rooms_singular():
     assert parse_rooms("1 pièce — 30 m²") == 1.0
 
 
+def test_parse_rooms_studio_counts_as_one():
+    # Swiss portals advertise 1-piece flats as "studio", often with no
+    # explicit room count — they must still be visible to room filters.
+    assert parse_rooms("Studio lumineux aux Pâquis") == 1.0
+    assert parse_rooms("Beaux studios à vendre") == 1.0
+    # An explicit count wins over the word "studio".
+    assert parse_rooms("Studio de 1,5 pièce") == 1.5
+
+
 def test_parse_rooms_absent_or_absurd():
-    assert parse_rooms("Studio lumineux aux Pâquis") is None
+    assert parse_rooms("Appartement lumineux aux Pâquis") is None
     assert parse_rooms(None) is None
     assert parse_rooms("25 pièces") is None  # parsing noise, not a real flat
 

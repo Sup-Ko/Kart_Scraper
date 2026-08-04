@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Maximum price in CHF.")
     parser.add_argument("--min-rooms", type=float, default=None,
                         help="Minimum number of rooms (Swiss 'pièces', e.g. 3.5).")
+    parser.add_argument("--max-rooms", type=float, default=None,
+                        help="Maximum number of rooms, e.g. 2 for small flats.")
+    parser.add_argument("--studios", action="store_true",
+                        help="Studios only — shorthand for --max-rooms 1.5. "
+                             "Listings advertised as 'studio' count as 1 room.")
     parser.add_argument("--min-surface", type=float, default=None,
                         help="Minimum living surface in m².")
     parser.add_argument("-s", "--source", action="append", default=None,
@@ -86,11 +91,15 @@ def run(args: argparse.Namespace) -> int:
         f"using: {', '.join(s.name for s in sources)} …"
     )
 
+    max_rooms = args.max_rooms
+    if args.studios and max_rooms is None:
+        max_rooms = 1.5
+
     all_listings: list[ApartmentListing] = []
     for source in sources:
         results = source.search(
             center, args.radius, args.max_price, args.min_rooms,
-            args.min_surface, geocoder,
+            max_rooms, args.min_surface, geocoder,
         )
         console.print(f"  • {source.label}: {len(results)} listing(s)")
         all_listings.extend(results)

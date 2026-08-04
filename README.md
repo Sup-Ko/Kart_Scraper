@@ -116,6 +116,9 @@ python -m geneva_immo
 # Family flat: max CHF 1.5M, at least 4 rooms and 90 m²
 python -m geneva_immo --max-price 1500000 --min-rooms 4 --min-surface 90
 
+# Studios only (listings advertised as "studio" count as 1 room)
+python -m geneva_immo --studios --max-price 600000
+
 # Measure distances from your workplace instead of the city centre
 python -m geneva_immo --near "Place des Nations, Genève" --radius 5
 

@@ -3,6 +3,10 @@
 Search the internet for **go-karts for sale near you** and rate each listing
 with a custom weighted score, so the best-value karts nearby rise to the top.
 
+> Also in this repo: [**geneva-immo**](#geneva-immo--apartments-for-sale-in-geneva-),
+> a sibling scraper for apartments for sale in Geneva, built on the same
+> infrastructure.
+
 It scrapes several marketplaces in parallel, geocodes every listing to measure
 how far it is from you (free, no API key), and ranks the results by a tunable
 score that blends **price**, **distance**, **listing quality** and
@@ -97,6 +101,56 @@ Subclass `BaseSource`, implement `fetch(...)` to return `Listing` objects, and
 register it in `kart_scraper/sources/__init__.py`. The base class handles error
 isolation, geocoding, distance, and `max_price` filtering for you. See
 `kart_scraper/sources/ebay.py` for a minimal example.
+
+## geneva-immo — apartments for sale in Geneva 🏠
+
+The `geneva_immo` package reuses the kart scraper's infrastructure (geocoding,
+headless-browser helper, Swiss price parsing, error-isolated plugin sources)
+to search Swiss property portals for **apartments for sale in and around
+Geneva**, and ranks them with a real-estate-specific score.
+
+```bash
+# Everything for sale in the canton, ranked by value
+python -m geneva_immo
+
+# Family flat: max CHF 1.5M, at least 4 rooms and 90 m²
+python -m geneva_immo --max-price 1500000 --min-rooms 4 --min-surface 90
+
+# Measure distances from your workplace instead of the city centre
+python -m geneva_immo --near "Place des Nations, Genève" --radius 5
+
+# Pick sources, tune weights, export
+python -m geneva_immo -s immobilier -s homegate
+python -m geneva_immo -w "value=0.5,size=0.2,quality=0.3"
+python -m geneva_immo -o html:apartments.html
+
+# Offline demo (no network)
+python -m geneva_immo -s sample
+```
+
+### The rating
+
+Prices are in CHF; the core value metric is **CHF per m²**, the number every
+Geneva buyer compares first. Sub-scores are normalized relative to the other
+apartments found:
+
+| Component   | Default weight | Higher score when…                            |
+|-------------|:--------------:|-----------------------------------------------|
+| `value`     | 0.35           | lower CHF/m² than the other listings          |
+| `size`      | 0.15           | more living surface                           |
+| `distance`  | 0.15           | closer to `--near` (0 if beyond `--radius`)   |
+| `quality`   | 0.25           | photos, description, rooms/surface/floor/year |
+| `freshness` | 0.10           | posted more recently (decays over ~90 days)   |
+
+### Sources
+
+| Source        | Tech            | Notes                                            |
+|---------------|-----------------|--------------------------------------------------|
+| `immobilier`  | requests + bs4  | immobilier.ch — server-rendered, most reliable.  |
+| `homegate`    | Playwright      | homegate.ch — largest CH portal, best-effort.    |
+| `immoscout24` | Playwright      | immoscout24.ch — agency listings, best-effort.   |
+| `anibis`      | Playwright      | anibis.ch — private sellers, best-effort.        |
+| `sample`      | bundled fixtures| Offline demo/test data; opt-in via `-s sample`.  |
 
 ## Develop
 

@@ -17,6 +17,7 @@ htmlcov/
 *.csv
 *.html
 !kart_scraper/data/report_template.html
+!geneva_immo/data/report_template.html
 !tests/fixtures/*.html
 
 # Caches

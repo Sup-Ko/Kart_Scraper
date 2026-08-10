@@ -14,6 +14,7 @@ import argparse
 
 from . import db, sources
 from .fedreg import ingest_federal_register, rules_for_agencies
+from .worldbank import coverage, ingest_worldbank_awards
 from .conflicts import find_conflicts, lag_report
 
 
@@ -28,6 +29,8 @@ def cmd_ingest(args) -> int:
         print(f"USASpending awards -> {sources.ingest_awards(conn)} new")
     if args.fedreg or want_all:
         print(f"Federal Register   -> {ingest_federal_register(conn)} new")
+    if args.worldbank or want_all:
+        print(f"World Bank awards  -> {ingest_worldbank_awards(conn)} new")
     return 0
 
 
@@ -247,6 +250,33 @@ def cmd_rules(args) -> int:
     return 0
 
 
+def cmd_coverage(args) -> int:
+    """Show what the collected data actually covers, by region."""
+    from .regions import SOURCES, coverage_gaps
+
+    conn = db.connect(args.db)
+    rows = coverage(conn)
+    if rows:
+        print("Awards held, by region and source")
+        print(f"  {'region':<10} {'source':<14} {'count':>7} {'total':>18}")
+        for r in rows:
+            total = f"{r['total']:,.0f}" if r["total"] else "-"
+            print(f"  {r['region']:<10} {r['source']:<14} {r['n']:>7} {total:>18}")
+    else:
+        print("No awards ingested yet.")
+
+    print("\nConfigured sources by region")
+    for s in sorted(SOURCES, key=lambda x: (x.region, x.key)):
+        key = "key" if s.needs_key else "no key"
+        print(f"  [{s.region:<8}] {s.name}  ({s.kind}, lag {s.lag}, {key})")
+        print(f"             limits: {s.limits}")
+
+    gaps = coverage_gaps()
+    if gaps:
+        print(f"\nNo dedicated source yet for: {', '.join(gaps)}")
+    return 0
+
+
 def cmd_status(args) -> int:
     conn = db.connect(args.db)
     q = lambda s: conn.execute(s).fetchone()[0]
@@ -272,6 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--form4", action="store_true")
     i.add_argument("--ptr", action="store_true")
     i.add_argument("--fedreg", action="store_true")
+    i.add_argument("--worldbank", action="store_true")
     i.add_argument("--days", type=int, default=7, help="Form 4 backfill days")
     i.set_defaults(func=cmd_ingest)
 
@@ -335,6 +366,9 @@ def build_parser() -> argparse.ArgumentParser:
                     help="load filings from a saved JSON response")
     lb.add_argument("--limit", type=int, default=10)
     lb.set_defaults(func=cmd_lobbying)
+
+    cv = sub.add_parser("coverage", help="what the data covers, by region")
+    cv.set_defaults(func=cmd_coverage)
 
     st = sub.add_parser("status", help="what's in the database")
     st.set_defaults(func=cmd_status)

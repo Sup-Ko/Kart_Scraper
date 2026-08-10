@@ -24,6 +24,7 @@ from pathlib import Path
 
 from . import db, http
 from .ptr_parse import iso_date
+from .regions import AMERICAS
 
 PDF_CACHE = Path("cache/ptr_pdfs")
 
@@ -226,11 +227,12 @@ def ingest_awards(conn: sqlite3.Connection, since: date | None = None,
             cur = conn.execute(
                 """INSERT OR IGNORE INTO award
                    (award_id, recipient, recipient_id, awarding_agy, amount,
-                    action_date, description, first_seen)
-                   VALUES (?,?,?,?,?,?,?,?)""",
+                    action_date, description, country, region, source, first_seen)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (r.get("Award ID"), r.get("Recipient Name"), r.get("recipient_id"),
                  r.get("Awarding Agency"), r.get("Award Amount"), r.get("Start Date"),
-                 (r.get("Description") or "")[:500], now),
+                 (r.get("Description") or "")[:500], "United States",
+                 AMERICAS, "usaspending", now),
             )
             new += cur.rowcount
 

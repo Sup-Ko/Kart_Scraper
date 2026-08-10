@@ -105,9 +105,13 @@ CREATE TABLE IF NOT EXISTS award (
     amount         REAL,
     action_date    TEXT,
     description    TEXT,
+    country        TEXT,
+    region         TEXT,
+    source         TEXT NOT NULL DEFAULT 'usaspending',
     first_seen     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_award_date ON award(action_date);
+CREATE INDEX IF NOT EXISTS ix_award_region ON award(region);
 CREATE INDEX IF NOT EXISTS ix_award_recipient ON award(recipient);
 
 CREATE TABLE IF NOT EXISTS member (
@@ -228,6 +232,21 @@ def now_iso() -> str:
 # before the schema script runs.
 MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("form4", "parsed", "INTEGER NOT NULL DEFAULT 0"),
+    # awards became multi-region once non-US sources were added
+    ("award", "country", "TEXT"),
+    ("award", "region", "TEXT"),
+    ("award", "source", "TEXT NOT NULL DEFAULT 'usaspending'"),
+)
+
+
+# Data fixes applied after the column migrations above. Kept separate and
+# idempotent: they only touch rows that predate a column and so carry NULL.
+BACKFILLS: tuple[tuple[str, str], ...] = (
+    # USASpending records are US federal contracts by definition, so rows
+    # written before the region column existed can be labelled with certainty.
+    ("award",
+     "UPDATE award SET country = 'United States', region = 'americas' "
+     "WHERE region IS NULL AND (source IS NULL OR source = 'usaspending')"),
 )
 
 
@@ -245,8 +264,16 @@ def _migrate(conn: sqlite3.Connection) -> list[str]:
             continue
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
         applied.append(f"{table}.{column}")
-    if applied:
-        conn.commit()
+    for table, statement in BACKFILLS:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if exists:
+            try:
+                conn.execute(statement)
+            except sqlite3.OperationalError:
+                pass  # column not present yet on a partially-built database
+    conn.commit()
     return applied
 
 

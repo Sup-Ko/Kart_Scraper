@@ -150,6 +150,33 @@ CREATE TABLE IF NOT EXISTS fedreg_doc (
 CREATE INDEX IF NOT EXISTS ix_fedreg_pub ON fedreg_doc(publication_date DESC);
 CREATE INDEX IF NOT EXISTS ix_fedreg_type ON fedreg_doc(doc_type);
 
+CREATE TABLE IF NOT EXISTS pac_committee (
+    committee_id   TEXT PRIMARY KEY,
+    name           TEXT,
+    connected_org  TEXT,
+    committee_type TEXT,
+    designation    TEXT,
+    state          TEXT,
+    first_seen     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_pac_org ON pac_committee(connected_org);
+
+CREATE TABLE IF NOT EXISTS pac_contribution (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    row_hash                 TEXT NOT NULL UNIQUE,
+    contributor_committee_id TEXT,
+    contributor_name         TEXT,
+    recipient_committee_id   TEXT,
+    recipient_name           TEXT,
+    candidate_name           TEXT,
+    amount                   REAL,
+    contribution_date        TEXT,
+    cycle                    INTEGER,
+    first_seen               TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_contrib_recipient ON pac_contribution(recipient_name);
+CREATE INDEX IF NOT EXISTS ix_contrib_contributor ON pac_contribution(contributor_name);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     source     TEXT,
     ran_at     TEXT,

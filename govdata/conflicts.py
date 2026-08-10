@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from .committees import jurisdiction_over
 from .company import match_score
 from .congress import committees_for_member
+from .fec import contributions_to_member
 
 MIN_SCORE = 0.6
 
@@ -53,6 +54,8 @@ class Conflict:
     jurisdiction: str = ""  # committee with jurisdiction over the awarding agency
     jurisdiction_basis: str = ""
     jurisdiction_strength: float = 0.0
+    pac_total: float = 0.0      # from THIS company's PAC to THIS member
+    pac_count: int = 0
 
     @property
     def amount_range(self) -> str:
@@ -71,8 +74,12 @@ class Conflict:
         near an award date, so jurisdiction is weighted far above proximity.
         """
         proximity = max(0.0, 1.0 - self.gap_days / 180.0)
+        # A recorded contribution from the same company's PAC is another
+        # structural link, weighted below jurisdiction but above timing.
+        funded = 0.5 if self.pac_count else 0.0
         return round(
-            self.name_score * (1.0 + 2.0 * self.jurisdiction_strength) + 0.3 * proximity,
+            self.name_score * (1.0 + 2.0 * self.jurisdiction_strength)
+            + funded + 0.3 * proximity,
             3,
         )
 
@@ -114,6 +121,7 @@ def find_conflicts(
     award_rows = [(a, d) for a, d in award_rows if d]
 
     _committee_cache: dict[str, list[str]] = {}
+    _pac_cache: dict[tuple, list] = {}
     found: list[Conflict] = []
     for t in trades:
         td = as_date(t["tx_date"])
@@ -147,6 +155,15 @@ def find_conflicts(
                 if jm and jm.strength > strength:
                     jurisdiction, basis, strength = committee, jm.basis, jm.strength
 
+            # Money flowing the other way: did this company's PAC give to
+            # this member? Legal and routine, but part of the same picture.
+            pac_key = (t["last_name"], a["recipient"])
+            contributions = _pac_cache.get(pac_key)
+            if contributions is None:
+                contributions = contributions_to_member(
+                    conn, t["last_name"] or "", company=a["recipient"] or "")
+                _pac_cache[pac_key] = contributions
+
             found.append(
                 Conflict(
                     member=member,
@@ -167,6 +184,8 @@ def find_conflicts(
                     jurisdiction=jurisdiction,
                     jurisdiction_basis=basis,
                     jurisdiction_strength=strength,
+                    pac_total=round(sum(c["amount"] or 0 for c in contributions), 2),
+                    pac_count=len(contributions),
                 )
             )
 

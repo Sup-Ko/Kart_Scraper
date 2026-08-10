@@ -87,6 +87,9 @@ def cmd_conflicts(args) -> int:
         print(f"    award {c.award_date} {award} to {c.recipient} [{c.awarding_agency}]")
         if c.jurisdiction:
             print(f"    sits on {c.jurisdiction} — {c.jurisdiction_basis}")
+        if c.pac_count:
+            print(f"    {c.recipient} PAC gave ${c.pac_total:,.0f} "
+                  f"to this member ({c.pac_count} contribution(s))")
         print(f"    gap {c.gap_days}d · name match {c.name_score} · salience {c.salience}\n")
 
     if not have_committees:
@@ -149,6 +152,38 @@ def cmd_insiders(args) -> int:
     return 0
 
 
+def cmd_fec(args) -> int:
+    from . import fec
+
+    conn = db.connect(args.db)
+    if args.import_path:
+        n = fec.import_contributions_json(conn, args.import_path)
+        print(f"imported {n} contributions from {args.import_path}")
+        return 0
+
+    if not fec.have_key(args.api_key):
+        print("No FEC API key set. Either:")
+        print("  export FEC_API_KEY=...        (free from api.data.gov)")
+        print("  govdata fec --import contributions.json")
+        print("\nEverything else still works; conflict analysis simply omits")
+        print("the campaign-finance dimension.")
+        return 1
+
+    companies = args.company
+    if not companies:
+        companies = [r["recipient"] for r in conn.execute(
+            "SELECT DISTINCT recipient FROM award WHERE recipient IS NOT NULL LIMIT 25")]
+        if not companies:
+            print("No companies given and none found in awards. Use --company.")
+            return 1
+        print(f"Looking up PACs for {len(companies)} award recipients")
+
+    pacs = fec.ingest_corporate_pacs(conn, companies, args.api_key)
+    contribs = fec.ingest_pac_contributions(conn, args.cycle, args.api_key)
+    print(f"PACs -> {pacs} new,  contributions -> {contribs} new")
+    return 0
+
+
 def cmd_rules(args) -> int:
     conn = db.connect(args.db)
     agencies = args.agency
@@ -188,6 +223,7 @@ def cmd_status(args) -> int:
     print(f"  Awards      : {q('SELECT COUNT(*) FROM award')}")
     print(f"  Form 4 txns : {q('SELECT COUNT(*) FROM form4_transaction')}")
     print(f"  Fed Register: {q('SELECT COUNT(*) FROM fedreg_doc')}")
+    print(f"  PAC contribs: {q('SELECT COUNT(*) FROM pac_contribution')}")
     return 0
 
 
@@ -245,6 +281,15 @@ def build_parser() -> argparse.ArgumentParser:
                      help="restrict to ticker(s), repeatable")
     ins.add_argument("--limit", type=int, default=20)
     ins.set_defaults(func=cmd_insiders)
+
+    fe = sub.add_parser("fec", help="corporate PAC campaign finance")
+    fe.add_argument("--api-key", dest="api_key")
+    fe.add_argument("--company", action="append", default=[],
+                    help="company name (repeatable); default: award recipients")
+    fe.add_argument("--cycle", type=int, default=2026)
+    fe.add_argument("--import", dest="import_path",
+                    help="load contributions from a saved JSON response")
+    fe.set_defaults(func=cmd_fec)
 
     st = sub.add_parser("status", help="what's in the database")
     st.set_defaults(func=cmd_status)

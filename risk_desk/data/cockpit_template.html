@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>risk_desk — {{ r.portfolio_name }}</title>
+<style>
+  :root {
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --text:#e6edf3; --muted:#8b98a9;
+    --border:#283040; --accent:#6ea8fe; --pos:#3fb950; --neg:#f85149; --warn:#e3b341;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f4f6f9; --panel:#fff; --panel2:#eef1f5; --text:#1a1f28; --muted:#5b6673;
+      --border:#e2e6ec; --accent:#2563eb; --pos:#1a7f37; --neg:#cf222e; --warn:#9a6700; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1150px;margin:0 auto;padding:26px 20px 70px}
+  header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px}
+  h1{font-size:21px;margin:0;letter-spacing:-.02em}
+  h1 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--accent)}
+  .sub{color:var(--muted);font-size:13px}
+  .banner{margin:14px 0 4px;padding:9px 13px;border:1px solid var(--border);border-left:3px solid var(--accent);
+    border-radius:7px;background:var(--panel);color:var(--muted);font-size:12.5px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:30px 0 12px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 15px}
+  .kpi .label{color:var(--muted);font-size:11.5px;display:flex;align-items:center;gap:5px}
+  .kpi .val{font-size:23px;font-weight:700;margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .kpi .foot{color:var(--muted);font-size:11px;margin-top:3px}
+  .pos{color:var(--pos)} .neg{color:var(--neg)} .warn{color:var(--warn)}
+  .info{display:inline-flex;width:14px;height:14px;border-radius:50%;border:1px solid var(--muted);
+    color:var(--muted);font-size:10px;line-height:12px;justify-content:center;cursor:help;font-style:normal}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  .scroll{overflow-x:auto;border:1px solid var(--border);border-radius:10px}
+  th,td{padding:9px 12px;text-align:right;white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;
+    background:var(--panel2);position:sticky;top:0}
+  td:first-child,th:first-child{text-align:left}
+  tbody tr{border-top:1px solid var(--border)}
+  tbody tr:hover{background:var(--panel2)}
+  .tick{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
+  .bar{height:7px;border-radius:4px;background:var(--accent);display:inline-block;vertical-align:middle}
+  .barwrap{background:var(--panel2);border-radius:4px;overflow:hidden;min-width:90px;display:inline-block;vertical-align:middle}
+  .expo{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media (max-width:720px){.expo{grid-template-columns:1fr}}
+  .exrow{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .exrow .nm{flex:0 0 120px} .exrow .pc{flex:0 0 48px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+  .heat td{text-align:center;font-variant-numeric:tabular-nums;border:1px solid var(--border);padding:6px 9px}
+  .heat th{text-align:center}
+  .scen{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:10px}
+  .scen .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .scen .nm{font-weight:700} .scen .ds{color:var(--muted);font-size:12px;margin-top:2px}
+  .scen .amt{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  details{margin:6px 0;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+  summary{cursor:pointer;padding:9px 13px;color:var(--muted);font-size:12.5px}
+  details p{margin:0;padding:0 13px 11px;color:var(--muted);font-size:12.5px}
+  footer{margin-top:36px;border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--panel2);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="mono">risk_desk</span> · {{ r.portfolio_name }}</h1>
+    <span class="sub">{{ r.total_value | money }} · {{ r.positions|length }} positions · {{ generated }}</span>
+  </header>
+  <div class="banner">
+    🔒 <b>Local &amp; independent.</b> Your positions never left this machine. Every number below shows its
+    formula — no black box. Not affiliated with BlackRock; “Aladdin” is their trademark.
+    Figures are analytics on your inputs, not investment advice.
+  </div>
+
+  <h2>Risk summary · 1-day, {{ r.confidence | pct(0) }} confidence</h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Annualized volatility <span class="info" title="{{ explain.ann_vol }}">i</span></div>
+      <div class="val">{{ r.ann_vol | pct }}</div>
+      <div class="foot">annualized return {{ r.ann_return | pct }}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Value at Risk <span class="info" title="{{ explain.var }}">i</span></div>
+      <div class="val neg">{{ r.var_hist | pct }}</div>
+      <div class="foot">{{ r.var_currency | money }} · parametric {{ r.var_param | pct }}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Expected shortfall <span class="info" title="{{ explain.es }}">i</span></div>
+      <div class="val neg">{{ r.expected_shortfall | pct }}</div>
+      <div class="foot">avg loss beyond VaR (tail severity)</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Max drawdown <span class="info" title="{{ explain.max_drawdown }}">i</span></div>
+      <div class="val warn">{{ r.max_drawdown | pct }}</div>
+      <div class="foot">worst peak-to-trough</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Beta to benchmark <span class="info" title="{{ explain.beta }}">i</span></div>
+      <div class="val">{{ "%.2f"|format(r.beta) if r.beta is not none else "—" }}</div>
+      <div class="foot">market sensitivity</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Concentration <span class="info" title="{{ explain.hhi }}">i</span></div>
+      <div class="val">{{ "%.1f"|format(r.effective_holdings) if r.effective_holdings else "—" }}</div>
+      <div class="foot">effective # of holdings (HHI {{ r.hhi }})</div>
+    </div>
+  </div>
+
+  <h2>Holdings &amp; risk attribution <span class="info" title="{{ explain.risk_contribution }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Class</th><th>Sector</th><th>Qty</th><th>Price</th>
+        <th>Market value</th><th>Weight</th><th>P&amp;L</th><th>Risk share</th>
+      </tr></thead>
+      <tbody>
+        {% for p in r.positions %}
+        <tr>
+          <td class="tick">{{ p.ticker }}</td>
+          <td>{{ p.asset_class }}</td>
+          <td>{{ p.sector }}</td>
+          <td>{{ "%.0f"|format(p.quantity) }}</td>
+          <td>{{ p.price | money }}</td>
+          <td>{{ p.market_value | money }}</td>
+          <td>{{ p.weight | pct }}</td>
+          <td class="{{ 'pos' if p.pnl >= 0 else 'neg' }}">{{ p.pnl | money }}</td>
+          <td>
+            <span class="barwrap" style="width:70px"><span class="bar" style="width:{{ p.risk_contribution_pct }}%"></span></span>
+            {{ "%.0f"|format(p.risk_contribution_pct) }}%
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="expo">
+    <div>
+      <h2>Exposure by asset class</h2>
+      {% for name, w in r.exposures.by_asset_class.items() %}
+      <div class="exrow"><span class="nm">{{ name }}</span>
+        <span class="barwrap" style="flex:1"><span class="bar" style="width:{{ (w*100)|round(1) }}%"></span></span>
+        <span class="pc">{{ w | pct }}</span></div>
+      {% endfor %}
+    </div>
+    <div>
+      <h2>Exposure by sector</h2>
+      {% for name, w in r.exposures.by_sector.items() %}
+      <div class="exrow"><span class="nm">{{ name }}</span>
+        <span class="barwrap" style="flex:1"><span class="bar" style="width:{{ (w*100)|round(1) }}%"></span></span>
+        <span class="pc">{{ w | pct }}</span></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if r.correlation.tickers %}
+  <h2>Correlation of daily returns</h2>
+  <div class="scroll">
+    <table class="heat">
+      <thead><tr><th></th>{% for t in r.correlation.tickers %}<th class="tick">{{ t }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for i in range(r.correlation.tickers|length) %}
+        <tr><th class="tick">{{ r.correlation.tickers[i] }}</th>
+          {% for j in range(r.correlation.tickers|length) %}
+          <td style="background:{{ r.correlation.matrix[i][j] | corr_color }}">{{ "%.2f"|format(r.correlation.matrix[i][j]) }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if f and f.factors %}
+  <h2>Factor risk model <span class="info" title="{{ explain.factor_beta }}">i</span></h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Systematic risk <span class="info" title="{{ explain.systematic_vs_specific }}">i</span></div>
+      <div class="val">{{ f.systematic_share | pct(0) }}</div>
+      <div class="foot">σ {{ f.systematic_vol_annual | pct }} — driven by factors</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Specific risk <span class="info" title="{{ explain.systematic_vs_specific }}">i</span></div>
+      <div class="val">{{ f.specific_share | pct(0) }}</div>
+      <div class="foot">σ {{ f.specific_vol_annual | pct }} — diversifiable</div>
+    </div>
+    {% for name, b in f.portfolio_betas.items() %}
+    <div class="kpi">
+      <div class="label">β to {{ name }}</div>
+      <div class="val">{{ "%.2f"|format(b) }}</div>
+      <div class="foot">{{ f.factor_risk_contribution.get(name, 0) }}% of variance</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="scroll" style="margin-top:12px">
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Weight</th>
+        {% for name in f.factors %}<th>β {{ name }}</th>{% endfor %}
+        <th>R²</th><th>Specific σ</th><th>Alpha (ann.)</th>
+      </tr></thead>
+      <tbody>
+        {% for a in f.assets %}
+        <tr>
+          <td class="tick">{{ a.ticker }}</td>
+          <td>{{ a.weight | pct }}</td>
+          {% for name in f.factors %}<td>{{ "%.2f"|format(a.betas.get(name, 0)) }}</td>{% endfor %}
+          <td>{{ "%.2f"|format(a.r_squared) }}</td>
+          <td>{{ a.specific_vol_annual | pct }}</td>
+          <td class="{{ 'pos' if a.alpha >= 0 else 'neg' }}">{{ a.alpha | pct }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if f.notes %}{% for n in f.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
+  {% endif %}
+
+  {% if adv %}
+  <h2>Advanced risk engine</h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">EWMA volatility <span class="info" title="{{ explain.ewma_vol }}">i</span></div>
+      <div class="val">{{ adv.ewma_vol_annual | pct }}</div>
+      <div class="foot">λ=0.94 · VaR {{ adv.ewma_var | pct }}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Monte Carlo VaR <span class="info" title="{{ explain.monte_carlo_var }}">i</span></div>
+      <div class="val neg">{{ adv.mc_var | pct }}</div>
+      <div class="foot">{{ "{:,}".format(adv.mc_sims) }} sims · ES {{ adv.mc_es | pct }}</div>
+    </div>
+  </div>
+
+  {% if adv.attribution %}
+  <h2>VaR attribution <span class="info" title="{{ explain.component_var }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Weight</th>
+        <th title="{{ explain.marginal_var }}">Marginal VaR</th>
+        <th title="{{ explain.component_var }}">Component VaR</th>
+        <th>% of VaR</th>
+        <th title="{{ explain.incremental_var }}">Incremental VaR if sold</th>
+      </tr></thead>
+      <tbody>
+        {% for a in adv.attribution %}
+        <tr>
+          <td class="tick">{{ a.ticker }}</td>
+          <td>{{ a.weight | pct }}</td>
+          <td>{{ a.marginal_var | pct(2) }}</td>
+          <td>{{ a.component_var | pct(2) }}</td>
+          <td>
+            <span class="barwrap" style="width:70px"><span class="bar" style="width:{{ a.component_pct if a.component_pct > 0 else 0 }}%"></span></span>
+            {{ "%.0f"|format(a.component_pct) }}%
+          </td>
+          <td class="{{ 'pos' if a.incremental_var < 0 else 'neg' }}">{{ a.incremental_var | pct(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if adv.worst_windows %}
+  <h2>Historical replay <span class="info" title="{{ explain.historical_replay }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Horizon</th><th>Worst</th><th>2nd worst</th><th>3rd worst</th></tr></thead>
+      <tbody>
+        {% for h, ws in adv.worst_windows.items() %}
+        <tr>
+          <td>{{ h }}-day</td>
+          {% for w in ws %}<td class="neg">{{ w.ret | pct }}<span class="sub" style="display:block;font-size:11px">{{ w.start }} → {{ w.end }}</span></td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if adv.notes %}{% for n in adv.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
+  {% endif %}
+
+  {% if fscen %}
+  <h2>Factor scenarios <span class="info" title="{{ explain.factor_scenario }}">i</span></h2>
+  {% for s in fscen %}
+  <div class="scen">
+    <div class="top">
+      <div>
+        <div class="nm">{{ s.name }}</div>
+        <div class="ds">{{ s.description }}</div>
+        <div class="ds">
+          {% for f, v in s.shocks.items() %}<span class="tag">{{ f }} {{ v | pct(0) }}</span> {% endfor %}
+        </div>
+      </div>
+      <div class="amt {{ 'pos' if s.pnl >= 0 else 'neg' }}">{{ s.pnl | money }} · {{ s.pnl_pct | pct }}</div>
+    </div>
+    {% if s.per_position %}
+    <div class="sub" style="margin-top:8px">
+      {% for p in s.per_position %}<span class="tag">{{ p.ticker }} {{ p['return'] | pct }}</span> {% endfor %}
+    </div>
+    {% endif %}
+    {% for n in s.notes %}<div class="sub" style="margin-top:6px">• {{ n }}</div>{% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if bt and bt.results %}
+  <h2>VaR backtest — is the model actually right? <span class="info" title="{{ explain.backtest }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Method</th><th>Days</th><th>Breaches</th><th>Expected</th>
+        <th>Rate</th><th>Kupiec LR</th><th>p-value</th><th>Verdict</th></tr></thead>
+      <tbody>
+        {% for r in bt.results %}
+        <tr>
+          <td class="tick">{{ r.method }}{% if r.method == bt.best_method %} ★{% endif %}</td>
+          <td>{{ r.observations }}</td>
+          <td>{{ r.breaches }}</td>
+          <td>{{ r.expected_breaches }}</td>
+          <td>{{ r.breach_rate | pct }}</td>
+          <td>{{ r.kupiec_lr }}</td>
+          <td>{{ r.p_value }}</td>
+          <td class="{{ 'pos' if r.verdict == 'well calibrated' else 'neg' }}"
+              style="text-align:left">{{ r.verdict }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">At {{ bt.confidence | pct(0) }} confidence, losses should exceed VaR on
+    {{ (1 - bt.confidence) | pct(0) }} of days. ★ = breach rate closest to target.
+    Re-estimated from a trailing {{ bt.window }}-day window at each step, using only
+    data available at that point.</p>
+  {% for n in bt.notes %}<p class="sub">• {{ n }}</p>{% endfor %}
+  {% endif %}
+
+  {% if policy and policy.positions %}
+  <h2>Policy exposure <span class="info" title="{{ explain.policy_exposure }}">i</span></h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Risk in contract-exposed names</div>
+      <div class="val {{ 'warn' if policy.exposed_risk_share >= 0.3 else '' }}">{{ policy.exposed_risk_share | pct(0) }}</div>
+      <div class="foot">vs {{ policy.exposed_value_share | pct(0) }} of portfolio value</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Federal awards observed</div>
+      <div class="val">{{ policy.total_awards | money }}</div>
+      <div class="foot">last {{ policy.window_days }} days</div>
+    </div>
+    {% for agency, amt in policy.by_agency.items() %}{% if loop.index <= 2 %}
+    <div class="kpi">
+      <div class="label">{{ agency }}</div>
+      <div class="val">{{ amt | money }}</div>
+      <div class="foot">awarded to names you hold</div>
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+
+  {% if policy.any_exposure %}
+  <div class="scroll" style="margin-top:12px">
+    <table>
+      <thead><tr><th>Ticker</th><th>Company</th><th>Weight</th><th>Risk share</th>
+        <th>Awards</th><th>Award total</th><th>Top agency</th></tr></thead>
+      <tbody>
+        {% for p in policy.positions %}{% if p.exposed %}
+        <tr>
+          <td class="tick">{{ p.ticker }}</td>
+          <td style="text-align:left">{{ p.company }}</td>
+          <td>{{ p.weight | pct }}</td>
+          <td>{{ "%.0f"|format(p.risk_contribution_pct) }}%</td>
+          <td>{{ p.award_count }}</td>
+          <td>{{ p.award_total | money }}</td>
+          <td style="text-align:left">{{ (p.agencies.keys()|list|first) or "—" }}</td>
+        </tr>
+        {% endif %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% for n in policy.notes %}<p class="sub">• {{ n }}</p>{% endfor %}
+  {% endif %}
+
+  {% if signals %}
+  <h2>Signal overlay — news on what you own <span class="info" title="{{ explain.attention }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Ticker</th><th>Risk share</th><th>News heat</th><th>Items</th><th>Attention</th><th>Top headline</th></tr></thead>
+      <tbody>
+        {% for s in signals %}
+        <tr>
+          <td class="tick">{{ s.ticker }}</td>
+          <td>{{ "%.0f"|format(s.risk_contribution_pct) }}%</td>
+          <td>{{ "%.0f"|format(s.news_heat) }}</td>
+          <td>{{ s.item_count }}</td>
+          <td><b class="{{ 'neg' if s.attention >= 20 else '' }}">{{ "%.0f"|format(s.attention) }}</b></td>
+          <td style="text-align:left;white-space:normal;max-width:380px">
+            {% if s.items %}<a href="{{ s.items[0].url }}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">{{ s.items[0].title }}</a>{% else %}<span class="sub">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if scenarios %}
+  <h2>Stress scenarios <span class="info" title="Editable shock assumptions applied to today's market value. Illustrative, not predictions.">i</span></h2>
+  {% for s in scenarios %}
+  <div class="scen">
+    <div class="top">
+      <div><div class="nm">{{ s.name }}</div><div class="ds">{{ s.description }}</div></div>
+      <div class="amt {{ 'pos' if s.pnl >= 0 else 'neg' }}">{{ s.pnl | money }} · {{ s.pnl_pct | pct }}</div>
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  {% if r.notes %}<h2>Notes</h2>{% for n in r.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
+
+  <h2>How every number is computed</h2>
+  {% for key, text in explain.items() %}
+  <details><summary>{{ key.replace('_',' ') }}</summary><p>{{ text }}</p></details>
+  {% endfor %}
+
+  <footer>
+    <b>risk_desk</b> — an open, local-first portfolio risk cockpit. Independent, transparent, yours.
+    Textbook analytics on your own data; not investment advice, not affiliated with any asset manager.
+  </footer>
+</div>
+</body>
+</html>

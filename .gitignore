@@ -17,7 +17,25 @@ htmlcov/
 *.csv
 *.html
 !kart_scraper/data/report_template.html
+!signal_desk/data/dashboard_template.html
+!risk_desk/data/cockpit_template.html
 !tests/fixtures/*.html
+
+# Signal Desk local data (personal — never commit)
+signaldesk.db
+signaldesk.config.json
+dashboard.html
+
+# risk_desk local data (personal — your positions never leave your machine)
+cockpit.html
+portfolio.csv
+*_prices.json
+!risk_desk/data/sample_prices.json
 
 # Caches
 .cache/
+
+# govdata local data (public records, but large/regenerable)
+govdata.sqlite
+govdata.sqlite-*
+cache/

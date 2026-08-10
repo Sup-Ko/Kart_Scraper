@@ -24,9 +24,11 @@ Treat the output as "look here", never as "this happened".
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from .committees import jurisdiction_over
 from .company import match_score
+from .congress import committees_for_member
 
 MIN_SCORE = 0.6
 
@@ -47,6 +49,10 @@ class Conflict:
     award_date: str
     gap_days: int
     name_score: float
+    committees: list[str] = field(default_factory=list)
+    jurisdiction: str = ""  # committee with jurisdiction over the awarding agency
+    jurisdiction_basis: str = ""
+    jurisdiction_strength: float = 0.0
 
     @property
     def amount_range(self) -> str:
@@ -55,6 +61,20 @@ class Conflict:
         if self.amount_high is None:
             return f"${self.amount_low:,}+"
         return f"${self.amount_low:,}-${self.amount_high:,}"
+
+    @property
+    def salience(self) -> float:
+        """Ranking score. Jurisdiction dominates timing, deliberately.
+
+        A trade in a company overseen by the member's own committee is
+        structurally more interesting than one that merely happened to fall
+        near an award date, so jurisdiction is weighted far above proximity.
+        """
+        proximity = max(0.0, 1.0 - self.gap_days / 180.0)
+        return round(
+            self.name_score * (1.0 + 2.0 * self.jurisdiction_strength) + 0.3 * proximity,
+            3,
+        )
 
 
 def find_conflicts(
@@ -93,6 +113,7 @@ def find_conflicts(
     award_rows = [(a, as_date(a["action_date"])) for a in awards]
     award_rows = [(a, d) for a, d in award_rows if d]
 
+    _committee_cache: dict[str, list[str]] = {}
     found: list[Conflict] = []
     for t in trades:
         td = as_date(t["tx_date"])
@@ -106,6 +127,26 @@ def find_conflicts(
             if score < min_score:
                 continue
             member = f"{t['first_name']} {t['last_name']}".strip()
+
+            # Committee jurisdiction over the awarding agency, when we have
+            # assignment data. Absent it, this stays empty and the conflict is
+            # reported on timing alone — never silently treated as no conflict.
+            committees = _committee_cache.get(t["last_name"])
+            if committees is None:
+                committees = committees_for_member(
+                    conn, t["last_name"] or "", t["first_name"] or "",
+                    t["state_dst"] or "",
+                )
+                _committee_cache[t["last_name"]] = committees
+
+            jurisdiction = ""
+            basis = ""
+            strength = 0.0
+            for committee in committees:
+                jm = jurisdiction_over(committee, a["awarding_agy"] or "")
+                if jm and jm.strength > strength:
+                    jurisdiction, basis, strength = committee, jm.basis, jm.strength
+
             found.append(
                 Conflict(
                     member=member,
@@ -122,11 +163,15 @@ def find_conflicts(
                     award_date=a["action_date"],
                     gap_days=gap,
                     name_score=score,
+                    committees=committees,
+                    jurisdiction=jurisdiction,
+                    jurisdiction_basis=basis,
+                    jurisdiction_strength=strength,
                 )
             )
 
-    # strongest name match first, then closest in time
-    found.sort(key=lambda c: (-c.name_score, c.gap_days))
+    # jurisdiction-backed matches first, then name confidence and proximity
+    found.sort(key=lambda c: -c.salience)
     return found[:limit]
 
 

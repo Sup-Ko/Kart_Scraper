@@ -70,15 +70,52 @@ def cmd_conflicts(args) -> int:
     if not rows:
         print("no candidates found (need both PTR trades and awards ingested)")
         return 0
+
+    have_committees = conn.execute(
+        "SELECT COUNT(*) n FROM member_committee"
+    ).fetchone()["n"]
+
     print(f"{len(rows)} candidate(s) for review — coincidences, not findings:\n")
     for c in rows[: args.limit]:
         award = f"${c.award_amount:,.0f}" if c.award_amount else "n/a"
-        print(f"  {c.member} ({c.state_dst})  {c.tx_type} {c.ticker or c.asset[:30]}")
+        flag = "  ** committee jurisdiction **" if c.jurisdiction_strength >= 1.0 else ""
+        print(f"  {c.member} ({c.state_dst})  {c.tx_type} {c.ticker or c.asset[:30]}{flag}")
         print(f"    trade {c.tx_date} {c.amount_range}")
         print(f"    award {c.award_date} {award} to {c.recipient} [{c.awarding_agency}]")
-        print(f"    gap {c.gap_days}d · name match {c.name_score}\n")
-    print("Name matching is approximate and amounts are ranges; verify before "
-          "drawing any conclusion.")
+        if c.jurisdiction:
+            print(f"    sits on {c.jurisdiction} — {c.jurisdiction_basis}")
+        print(f"    gap {c.gap_days}d · name match {c.name_score} · salience {c.salience}\n")
+
+    if not have_committees:
+        print("NOTE: no committee assignments loaded, so these are ranked on timing")
+        print("      and name match alone. Add them for the jurisdiction dimension:")
+        print("        govdata congress --import assignments.json   (offline)")
+        print("        CONGRESS_API_KEY=... govdata congress        (live)")
+    print("\nName matching is approximate, amounts are ranges, and many trades are")
+    print("made by managed accounts or blind trusts. Verify before concluding anything.")
+    return 0
+
+
+def cmd_congress(args) -> int:
+    from . import congress
+
+    conn = db.connect(args.db)
+    if args.import_path:
+        n = congress.import_assignments_json(conn, args.import_path)
+        print(f"imported {n} committee assignments from {args.import_path}")
+        return 0
+    if not congress.have_key(args.api_key):
+        print("No Congress.gov API key set. Either:")
+        print("  export CONGRESS_API_KEY=...   (free from api.data.gov)")
+        print("  govdata congress --import assignments.json")
+        print("\nEverything else still works; conflict analysis will simply rank")
+        print("on timing and name match without the jurisdiction dimension.")
+        return 1
+    members = congress.ingest_members(conn, args.congress, args.api_key)
+    seats = congress.ingest_committee_assignments(
+        conn, args.congress, args.chamber, args.api_key
+    )
+    print(f"members -> {members} new,  committee seats -> {seats} new")
     return 0
 
 
@@ -121,6 +158,14 @@ def build_parser() -> argparse.ArgumentParser:
     cf.add_argument("--min-score", type=float, default=0.6, dest="min_score")
     cf.add_argument("--limit", type=int, default=25)
     cf.set_defaults(func=cmd_conflicts)
+
+    cg = sub.add_parser("congress", help="member committee assignments (Congress.gov)")
+    cg.add_argument("--api-key", dest="api_key", help="api.data.gov key")
+    cg.add_argument("--congress", type=int, default=119)
+    cg.add_argument("--chamber", default="house", choices=["house", "senate"])
+    cg.add_argument("--import", dest="import_path",
+                    help="load assignments from a local JSON file instead")
+    cg.set_defaults(func=cmd_congress)
 
     st = sub.add_parser("status", help="what's in the database")
     st.set_defaults(func=cmd_status)

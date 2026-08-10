@@ -97,11 +97,37 @@ similarly-named companies within a time window (either direction — a trade
 shortly *before* an award is as interesting as one after):
 
 ```
-Alex Jones (TX07)  purchase RTX
-  trade 2025-02-10 $100,001-$250,000
-  award 2025-02-19 $1,100,000,000 to RTX CORPORATION [Department of Defense]
-  gap 9d · name match 1.0
+Pat Smith (CA01)  purchase LMT  ** committee jurisdiction **
+  trade 2025-01-15 $15,001-$50,000
+  award 2025-01-28 $2,400,000,000 to LOCKHEED MARTIN CORPORATION [Department of Defense]
+  sits on Committee on Armed Services — committee jurisdiction includes 'defense'
+  gap 13d · name match 1.0 · salience 3.278
 ```
+
+### Jurisdiction beats timing
+
+Timing proximity alone is weak: a member buying a defense contractor two weeks
+before a Pentagon award may simply own a defense fund. The question with actual
+weight is whether they sit on a committee with **jurisdiction over the agency
+that made the award**.
+
+So `salience` weights jurisdiction far above proximity, and a committee-backed
+match outranks a closer-in-time coincidence. Committee assignments come from
+the Congress.gov API:
+
+```bash
+export CONGRESS_API_KEY=...        # free from api.data.gov
+govdata congress                   # fetch members + committee rosters
+
+govdata congress --import assignments.json   # or load offline, no key needed
+```
+
+Without either, **everything still works** — conflicts are simply ranked on
+timing and name match, and the CLI says so rather than silently omitting the
+dimension. The committee→agency jurisdiction map is bundled stable reference
+data (`committees.py`); government-wide committees like Appropriations match at
+reduced strength, since "they fund every agency" is true but far less pointed
+than sitting on the authorizing committee.
 
 **Read these as "look here", never "this happened."** The limits are real and
 deliberately surfaced in the output:

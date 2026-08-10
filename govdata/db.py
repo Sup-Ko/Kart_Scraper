@@ -84,6 +84,29 @@ CREATE TABLE IF NOT EXISTS award (
 CREATE INDEX IF NOT EXISTS ix_award_date ON award(action_date);
 CREATE INDEX IF NOT EXISTS ix_award_recipient ON award(recipient);
 
+CREATE TABLE IF NOT EXISTS member (
+    bioguide_id  TEXT PRIMARY KEY,
+    last_name    TEXT,
+    first_name   TEXT,
+    state        TEXT,
+    district     TEXT,
+    party        TEXT,
+    chamber      TEXT,
+    congress     INTEGER,
+    first_seen   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_member_last ON member(last_name);
+
+CREATE TABLE IF NOT EXISTS member_committee (
+    bioguide_id     TEXT NOT NULL REFERENCES member(bioguide_id),
+    committee       TEXT NOT NULL,
+    committee_code  TEXT,
+    congress        INTEGER,
+    role            TEXT,
+    first_seen      TEXT NOT NULL,
+    UNIQUE (bioguide_id, committee, congress)
+);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     source     TEXT,
     ran_at     TEXT,

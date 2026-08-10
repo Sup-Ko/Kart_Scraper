@@ -263,3 +263,127 @@ def test_find_conflicts_respects_time_window(tmp_path):
     conn.commit()
     assert find_conflicts(conn, window_days=30) == []
     conn.close()
+
+
+# ---- committee jurisdiction -------------------------------------------------
+
+def test_jurisdiction_matches_subject_matter_committee():
+    from govdata.committees import jurisdiction_over
+    m = jurisdiction_over("Committee on Armed Services", "Department of Defense")
+    assert m is not None and m.strength == 1.0
+    m = jurisdiction_over("House Committee on Financial Services", "Department of the Treasury")
+    assert m is not None and m.strength == 1.0
+
+
+def test_jurisdiction_rejects_unrelated_committee():
+    from govdata.committees import jurisdiction_over
+    assert jurisdiction_over("Committee on Agriculture", "Department of Defense") is None
+
+
+def test_broad_committee_matches_weakly():
+    """Appropriations funds everything — a real but much weaker connection."""
+    from govdata.committees import jurisdiction_over
+    m = jurisdiction_over("Committee on Appropriations", "Department of Defense")
+    assert m is not None and m.strength == 0.4
+
+
+def test_normalize_committee_strips_boilerplate():
+    from govdata.committees import normalize_committee
+    assert normalize_committee("House Committee on Armed Services") == "armed services"
+    assert normalize_committee("Subcommittee on Defense") == "defense"
+
+
+def test_import_assignments_and_lookup(tmp_path):
+    import json
+    from govdata import congress
+    conn = db.connect(tmp_path / "g.sqlite")
+    path = tmp_path / "assign.json"
+    path.write_text(json.dumps([
+        {"last_name": "Smith", "first_name": "Pat", "state_dst": "CA01",
+         "committees": ["Committee on Armed Services", "Committee on Appropriations"]},
+    ]), encoding="utf-8")
+    assert congress.import_assignments_json(conn, str(path)) == 2
+    names = congress.committees_for_member(conn, "Smith", "Pat", "CA01")
+    assert "Committee on Armed Services" in names
+    conn.close()
+
+
+def test_conflict_gains_jurisdiction_and_outranks_timing(tmp_path):
+    """A committee-backed match must outrank a closer-in-time coincidence."""
+    import json
+    from govdata import congress
+    conn = db.connect(tmp_path / "g.sqlite")
+
+    # Smith sits on Armed Services; Jones sits on Agriculture (unrelated to DoD)
+    path = tmp_path / "a.json"
+    path.write_text(json.dumps([
+        {"last_name": "Smith", "first_name": "Pat", "state_dst": "CA01",
+         "committees": ["Committee on Armed Services"]},
+        {"last_name": "Jones", "first_name": "Alex", "state_dst": "TX07",
+         "committees": ["Committee on Agriculture"]},
+    ]), encoding="utf-8")
+    congress.import_assignments_json(conn, str(path))
+
+    for doc, last, first, sd in (("D1", "Smith", "Pat", "CA01"),
+                                 ("D2", "Jones", "Alex", "TX07")):
+        conn.execute(
+            """INSERT INTO ptr_filing (doc_id,chamber,last_name,first_name,state_dst,
+               year,filing_date,pdf_url,status,first_seen) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (doc, "house", last, first, sd, 2025, "2025-02-18", "u",
+             db.PARSED, db.now_iso()))
+    conn.commit()
+
+    db.save_trades(conn, [
+        # Smith: 40-day gap, but on the committee overseeing DoD
+        Trade(doc_id="D1", asset="Lockheed Martin Corp (LMT)", ticker="LMT",
+              tx_type="purchase", tx_date="2024-12-19", lag_days=61),
+        # Jones: 1-day gap, but no jurisdiction over DoD
+        Trade(doc_id="D2", asset="Lockheed Martin Corp (LMT)", ticker="LMT",
+              tx_type="purchase", tx_date="2025-01-27", lag_days=22),
+    ])
+    conn.execute(
+        """INSERT INTO award (award_id,recipient,recipient_id,awarding_agy,amount,
+           action_date,description,first_seen) VALUES (?,?,?,?,?,?,?,?)""",
+        ("A1", "LOCKHEED MARTIN CORPORATION", "r1", "Department of Defense",
+         2.4e9, "2025-01-28", "F-35", db.now_iso()))
+    conn.commit()
+
+    rows = find_conflicts(conn, window_days=180)
+    assert len(rows) == 2
+    top = rows[0]
+    assert top.member == "Pat Smith", "jurisdiction must outrank mere proximity"
+    assert top.jurisdiction_strength == 1.0
+    assert "Armed Services" in top.jurisdiction
+    # the closer-in-time trade without jurisdiction ranks below
+    assert rows[1].member == "Alex Jones"
+    assert rows[1].jurisdiction_strength == 0.0
+    conn.close()
+
+
+def test_conflicts_work_without_committee_data(tmp_path):
+    """Degrading gracefully: no assignments loaded must not break analysis."""
+    conn = db.connect(tmp_path / "g.sqlite")
+    _seed_filing(conn)
+    db.save_trades(conn, [
+        Trade(doc_id="DOC1", asset="Lockheed Martin Corp (LMT)", ticker="LMT",
+              tx_type="purchase", tx_date="2025-01-15", lag_days=34)])
+    conn.execute(
+        """INSERT INTO award (award_id,recipient,recipient_id,awarding_agy,amount,
+           action_date,description,first_seen) VALUES (?,?,?,?,?,?,?,?)""",
+        ("A1", "LOCKHEED MARTIN CORPORATION", "r1", "Department of Defense",
+         1e9, "2025-01-28", "x", db.now_iso()))
+    conn.commit()
+    rows = find_conflicts(conn)
+    assert len(rows) == 1
+    assert rows[0].jurisdiction == "" and rows[0].jurisdiction_strength == 0.0
+    conn.close()
+
+
+def test_congress_ingest_without_key_is_a_noop(tmp_path, monkeypatch):
+    from govdata import congress
+    monkeypatch.delenv("CONGRESS_API_KEY", raising=False)
+    conn = db.connect(tmp_path / "g.sqlite")
+    assert congress.ingest_members(conn) == 0          # no network call attempted
+    assert congress.ingest_committee_assignments(conn) == 0
+    assert not congress.have_key()
+    conn.close()

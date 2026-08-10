@@ -17,10 +17,11 @@ from .advanced import analyze_advanced
 from .analytics import analyze
 from .backtest import backtest_portfolio
 from .bridge import DEFAULT_SIGNAL_DB, load_aliases, load_signals, overlay
-from .factors import analyze_factors
+from .factors import DEFAULT_FACTOR_PROXIES, analyze_factors
+from .fred import build_fred_factors, have_key as have_fred_key
 from .loader import load_portfolio_csv, write_sample_portfolio
 from .policy import analyze_policy_exposure, load_awards
-from .prices import StooqProvider, load_prices_json, sample_prices
+from .prices import StooqProvider, align, load_prices_json, sample_prices
 from .report import render_cockpit
 from .scenarios import (
     apply_factor_scenario,
@@ -74,7 +75,22 @@ def cmd_report(args: argparse.Namespace) -> int:
     # --- advanced engine (factor model + Monte Carlo / VaR attribution) ------
     factors = advanced = None
     if not args.basic:
-        factors = analyze_factors(report, series)
+        # Real economic series beat ETF proxies: they are independent of the
+        # portfolio, so a rates holding is no longer regressed against itself.
+        extra_factors = {}
+        proxies = dict(DEFAULT_FACTOR_PROXIES)
+        if args.fred and have_fred_key(args.fred_key):
+            dates, _ = align(series, portfolio.tickers())
+            extra_factors = build_fred_factors(dates, key=args.fred_key)
+            if extra_factors:
+                # drop the ETF stand-ins the real series supersede
+                proxies = {"Market": DEFAULT_FACTOR_PROXIES.get("Market", "SPY")}
+                print(f"Using FRED factors: {', '.join(extra_factors)}")
+        elif args.fred:
+            print("FRED requested but no FRED_API_KEY set; using ETF proxies.")
+
+        factors = analyze_factors(report, series, proxies=proxies,
+                                  extra_factors=extra_factors or None)
         advanced = analyze_advanced(
             report, series, confidence=args.confidence, sims=args.sims
         )
@@ -174,6 +190,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("--backtest-window", type=int, default=100,
                        dest="backtest_window",
                        help="trailing window used to re-estimate VaR when backtesting")
+    p_rep.add_argument("--fred", action="store_true",
+                       help="use real FRED yield/credit series as factors")
+    p_rep.add_argument("--fred-key", dest="fred_key", help="FRED API key")
     p_rep.add_argument("--govdata", default="govdata.sqlite",
                        help="govdata database for federal award exposure")
     p_rep.add_argument("--policy-window", type=int, default=365,

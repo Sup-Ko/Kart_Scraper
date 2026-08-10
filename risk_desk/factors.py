@@ -90,6 +90,7 @@ def analyze_factors(
     report,
     price_series: dict[str, PriceSeries],
     proxies: dict[str, str] | None = None,
+    extra_factors: dict[str, list[float]] | None = None,
 ) -> FactorReport:
     """Fit the factor model and decompose portfolio risk.
 
@@ -101,6 +102,20 @@ def analyze_factors(
     _, closes = align(price_series, tickers)
 
     factor_names, factor_series = build_factor_returns(price_series, proxies)
+
+    # Externally supplied factors (e.g. real yields from FRED) are appended.
+    # They are independent of what the portfolio holds, which is the point — but
+    # deciding which ETF proxy they supersede is the CALLER's job, made explicit
+    # by passing a narrowed ``proxies`` mapping. Keeping both a rates ETF and a
+    # real yield series would double-count the same risk and reintroduce
+    # collinearity, so the CLI drops the superseded proxies when FRED is on.
+    if extra_factors:
+        for name, series in extra_factors.items():
+            if not series:
+                continue
+            factor_names.append(name)
+            factor_series.append(list(series))
+
     fr = FactorReport(factors=factor_names)
 
     if not factor_names:
@@ -156,7 +171,8 @@ def analyze_factors(
     # giving R²=1 and zero specific risk. That is an artifact of the factor
     # choice, not a real absence of idiosyncratic risk — say so plainly rather
     # than let a too-clean number pass as insight.
-    proxy_tickers = {t.upper() for t in proxies.values()}
+    external = set(extra_factors or {})
+    proxy_tickers = {t.upper() for name, t in proxies.items() if name not in external}
     self_fitted = [f.ticker for f in fits if f.ticker.upper() in proxy_tickers]
     if self_fitted:
         fr.notes.append(

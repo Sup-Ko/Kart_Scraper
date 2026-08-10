@@ -43,6 +43,7 @@ def render_cockpit(
     signals=None,
     policy=None,
     backtest=None,
+    factor_scenarios=None,
 ) -> Path:
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
@@ -61,6 +62,7 @@ def render_cockpit(
         signals=signals,
         policy=policy,
         bt=backtest,
+        fscen=factor_scenarios,
         explain=EXPLAIN,
         generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     )

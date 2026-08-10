@@ -281,6 +281,30 @@
   {% if adv.notes %}{% for n in adv.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
   {% endif %}
 
+  {% if fscen %}
+  <h2>Factor scenarios <span class="info" title="{{ explain.factor_scenario }}">i</span></h2>
+  {% for s in fscen %}
+  <div class="scen">
+    <div class="top">
+      <div>
+        <div class="nm">{{ s.name }}</div>
+        <div class="ds">{{ s.description }}</div>
+        <div class="ds">
+          {% for f, v in s.shocks.items() %}<span class="tag">{{ f }} {{ v | pct(0) }}</span> {% endfor %}
+        </div>
+      </div>
+      <div class="amt {{ 'pos' if s.pnl >= 0 else 'neg' }}">{{ s.pnl | money }} · {{ s.pnl_pct | pct }}</div>
+    </div>
+    {% if s.per_position %}
+    <div class="sub" style="margin-top:8px">
+      {% for p in s.per_position %}<span class="tag">{{ p.ticker }} {{ p['return'] | pct }}</span> {% endfor %}
+    </div>
+    {% endif %}
+    {% for n in s.notes %}<div class="sub" style="margin-top:6px">• {{ n }}</div>{% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+
   {% if bt and bt.results %}
   <h2>VaR backtest — is the model actually right? <span class="info" title="{{ explain.backtest }}">i</span></h2>
   <div class="scroll">

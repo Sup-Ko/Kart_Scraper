@@ -33,6 +33,7 @@ EXPLAIN: dict[str, str] = {
     "component_var": "wᵢ × marginal VaR. By Euler's theorem these sum exactly to total VaR — a true attribution of risk to positions.",
     "incremental_var": "the change in portfolio VaR if this position were sold entirely and the rest renormalized. Negative = selling it reduces risk.",
     "historical_replay": "the worst rolling 1/5/20-day returns your actual holdings lived through in the sample — real paths, not hypothetical shocks.",
+    "factor_scenario": "a shock applied in factor space: each position moves by its OWN fitted betas (rᵢ = Σ βᵢ,f · shock_f) rather than every equity being assumed to move together. Models the systematic response only — idiosyncratic single-name moves are not simulated.",
     "backtest": "walk-forward test of the VaR model against realised returns: at 95% confidence, losses should exceed VaR on ~5% of days. The Kupiec proportion-of-failures test (LR, chi-square 1df) says whether the observed breach rate is consistent with that. This grades the risk engine's own accuracy.",
     "policy_exposure": "share of portfolio RISK (not just value) held in companies with federal contract awards in the lookback window. Risk share is the honest measure: a small position driving large volatility is a bigger policy bet than a large quiet one.",
     "attention": "news heat × that position's share of portfolio risk. Surfaces stories that matter because of what you actually own.",

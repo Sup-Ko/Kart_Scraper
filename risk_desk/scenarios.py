@@ -62,6 +62,126 @@ def apply_scenario(report: RiskReport, scenario: Scenario) -> ScenarioResult:
     )
 
 
+@dataclass
+class FactorScenario:
+    """A shock expressed in factor space rather than by asset class.
+
+    ``shocks`` maps a factor name to the **return of that factor** (not a yield
+    change): ``{"Market": -0.20}`` means the market factor falls 20%. Each
+    position then moves by its own estimated sensitivity,
+    ``rᵢ = Σ_f βᵢ,f · shock_f``, instead of every equity being assumed to move
+    together.
+    """
+
+    name: str
+    description: str = ""
+    shocks: dict[str, float] = field(default_factory=dict)
+
+
+@dataclass
+class FactorScenarioResult:
+    name: str
+    description: str
+    pnl: float
+    pnl_pct: float
+    shocks: dict[str, float]
+    per_position: list[dict]
+    unexplained_weight: float = 0.0  # weight with no factor fit
+    notes: list[str] = field(default_factory=list)
+
+
+def apply_factor_scenario(report, factor_report, scenario: FactorScenario
+                          ) -> FactorScenarioResult:
+    """Propagate a factor shock through each position's fitted betas.
+
+    This is strictly more honest than shocking asset classes directly: a
+    low-beta defensive name and a high-beta cyclical do not fall by the same
+    amount in a market selloff, and the factor model already measured how much
+    each one actually moves.
+
+    Only the *systematic* response is modelled. Idiosyncratic moves — the
+    residual the factors do not explain — are not simulated here, so a
+    single-name blowup will not appear. That limit is reported rather than
+    glossed over.
+    """
+    fits = {f.ticker: f for f in getattr(factor_report, "assets", [])}
+    positions = {p.ticker: p for p in report.positions}
+
+    total_pnl = 0.0
+    per_position: list[dict] = []
+    unexplained = 0.0
+
+    for ticker, pos in positions.items():
+        fit = fits.get(ticker)
+        if fit is None:
+            unexplained += pos.weight
+            continue
+        ret = sum(
+            fit.betas.get(factor, 0.0) * shock
+            for factor, shock in scenario.shocks.items()
+        )
+        pnl = pos.market_value * ret
+        total_pnl += pnl
+        per_position.append({
+            "ticker": ticker,
+            "return": round(ret, 4),
+            "pnl": round(pnl, 2),
+            "r_squared": fit.r_squared,
+        })
+
+    pnl_pct = (total_pnl / report.total_value) if report.total_value else 0.0
+    result = FactorScenarioResult(
+        name=scenario.name,
+        description=scenario.description,
+        pnl=round(total_pnl, 2),
+        pnl_pct=round(pnl_pct, 4),
+        shocks=dict(scenario.shocks),
+        per_position=sorted(per_position, key=lambda d: d["pnl"]),
+        unexplained_weight=round(unexplained, 4),
+    )
+
+    if unexplained > 0.001:
+        result.notes.append(
+            f"{unexplained:.0%} of the portfolio has no factor fit and is held "
+            "flat in this scenario."
+        )
+    weak = [p for p in per_position if p["r_squared"] < 0.3]
+    if weak:
+        result.notes.append(
+            "Low factor explanatory power for "
+            + ", ".join(p["ticker"] for p in weak)
+            + " — these move mostly for their own reasons, so their modelled "
+              "response understates what could actually happen."
+        )
+    return result
+
+
+def default_factor_scenarios() -> list[FactorScenario]:
+    """Factor shocks as editable assumptions. Returns of the factor itself."""
+    return [
+        FactorScenario(
+            name="Equity bear market",
+            description="Market factor falls 20%; each name moves by its own beta.",
+            shocks={"Market": -0.20},
+        ),
+        FactorScenario(
+            name="Flight to quality",
+            description="Equities sell off, long bonds rally, gold bid.",
+            shocks={"Market": -0.15, "Rates": 0.08, "Gold": 0.10},
+        ),
+        FactorScenario(
+            name="Inflation shock",
+            description="Bonds and equities fall together; gold rallies.",
+            shocks={"Market": -0.10, "Rates": -0.12, "Gold": 0.15},
+        ),
+        FactorScenario(
+            name="Melt-up",
+            description="Risk assets rally hard, safe havens sold.",
+            shocks={"Market": 0.15, "Rates": -0.04, "Gold": -0.05},
+        ),
+    ]
+
+
 def default_scenarios() -> list[Scenario]:
     """A starter kit of transparent, editable stress scenarios."""
     return [

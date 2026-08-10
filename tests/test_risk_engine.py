@@ -255,3 +255,65 @@ def test_flags_holding_used_as_its_own_factor_proxy():
     assert any("also used as a factor proxy" in n for n in f.notes)
     # and the artifact itself is real: R²=1 against itself
     assert f.assets[0].r_squared > 0.999
+
+
+# ---- factor-space scenarios -------------------------------------------------
+
+def test_factor_scenario_uses_per_asset_betas():
+    """A high-beta and a negative-beta name must move differently, by their betas."""
+    from risk_desk.scenarios import FactorScenario, apply_factor_scenario
+    series = sample_prices()
+    p = Portfolio(holdings=[
+        Holding("AAPL", 40, 150, "Equity", "Technology"),
+        Holding("TLT", 60, 98, "Bond", "Government"),
+    ])
+    report = analyze(p, series, benchmark=series.get("SPY"))
+    f = analyze_factors(report, series, proxies={"Market": "SPY"})
+
+    res = apply_factor_scenario(
+        report, f, FactorScenario("Bear", shocks={"Market": -0.20}))
+    by = {d["ticker"]: d for d in res.per_position}
+    # AAPL has positive market beta -> falls; TLT has negative beta -> rises
+    assert by["AAPL"]["return"] < 0
+    assert by["TLT"]["return"] > 0
+    # and the per-position return equals beta x shock
+    aapl_beta = {a.ticker: a for a in f.assets}["AAPL"].betas["Market"]
+    assert abs(by["AAPL"]["return"] - aapl_beta * -0.20) < 1e-3
+
+
+def test_factor_scenario_pnl_matches_position_sum():
+    from risk_desk.scenarios import FactorScenario, apply_factor_scenario
+    series = sample_prices()
+    report = analyze(_portfolio(), series, benchmark=series.get("SPY"))
+    f = analyze_factors(report, series)
+    res = apply_factor_scenario(
+        report, f, FactorScenario("Bear", shocks={"Market": -0.20}))
+    assert abs(res.pnl - sum(d["pnl"] for d in res.per_position)) < 1.0
+    assert abs(res.pnl_pct - res.pnl / report.total_value) < 1e-3
+
+
+def test_factor_scenario_reports_unfitted_weight():
+    """Positions with no factor fit are held flat and the gap is disclosed."""
+    from risk_desk.scenarios import FactorScenario, apply_factor_scenario
+    from risk_desk.models import PriceSeries
+    series = sample_prices()
+    # ZZZ has price history but will not be in the factor fit set
+    p = Portfolio(holdings=[Holding("AAPL", 40, 150), Holding("ZZZ", 10, 100)])
+    series = dict(series)
+    series["ZZZ"] = PriceSeries("ZZZ", series["AAPL"].dates, series["AAPL"].closes)
+    report = analyze(p, series, benchmark=series.get("SPY"))
+    f = analyze_factors(report, series, proxies={"Market": "SPY"})
+    # drop ZZZ's fit to simulate an unfitted holding
+    f.assets = [a for a in f.assets if a.ticker != "ZZZ"]
+    res = apply_factor_scenario(
+        report, f, FactorScenario("Bear", shocks={"Market": -0.20}))
+    assert res.unexplained_weight > 0
+    assert any("no factor fit" in n for n in res.notes)
+
+
+def test_default_factor_scenarios_cover_both_directions():
+    from risk_desk.scenarios import default_factor_scenarios
+    names = [s.name for s in default_factor_scenarios()]
+    assert "Equity bear market" in names and "Melt-up" in names
+    for s in default_factor_scenarios():
+        assert s.shocks  # every scenario actually shocks something

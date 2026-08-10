@@ -22,7 +22,12 @@ from .loader import load_portfolio_csv, write_sample_portfolio
 from .policy import analyze_policy_exposure, load_awards
 from .prices import StooqProvider, load_prices_json, sample_prices
 from .report import render_cockpit
-from .scenarios import apply_scenario, default_scenarios
+from .scenarios import (
+    apply_factor_scenario,
+    apply_scenario,
+    default_factor_scenarios,
+    default_scenarios,
+)
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -74,6 +79,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             report, series, confidence=args.confidence, sims=args.sims
         )
 
+    # --- factor-space scenarios: propagate shocks through fitted betas ------
+    factor_scenarios = None
+    if factors and factors.assets:
+        factor_scenarios = [
+            apply_factor_scenario(report, factors, s) for s in default_factor_scenarios()
+        ]
+
     # --- backtest: grade the VaR model against realised returns -------------
     backtest = None
     if not args.basic:
@@ -100,7 +112,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     out = render_cockpit(
         report, results, args.out,
         factors=factors, advanced=advanced, signals=signals, policy=policy,
-        backtest=backtest,
+        backtest=backtest, factor_scenarios=factor_scenarios,
     )
 
     print(f"Portfolio value: {report.base_currency} {report.total_value:,.0f}")
@@ -117,6 +129,10 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"Monte Carlo VaR: {advanced.mc_var*100:.1f}%   "
               f"MC ES: {advanced.mc_es*100:.1f}%   "
               f"EWMA vol: {advanced.ewma_vol_annual*100:.1f}%")
+    if factor_scenarios:
+        worst = min(factor_scenarios, key=lambda s: s.pnl)
+        print(f"Worst factor scenario: {worst.name} {worst.pnl_pct*100:+.1f}% "
+              f"({report.base_currency} {worst.pnl:,.0f})")
     if backtest and backtest.results:
         for r in backtest.results:
             print(f"Backtest {r.method:11} {r.breaches:3} breaches vs "

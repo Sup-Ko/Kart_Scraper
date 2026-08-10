@@ -29,6 +29,10 @@ RATE_LIMITS = {
     "disclosures-clerk.house.gov": 1.0,
     "api.usaspending.gov": 0.5,
     "www.defense.gov": 1.0,
+    "lda.senate.gov": 1.0,
+    "api.open.fec.gov": 0.5,
+    "api.congress.gov": 0.5,
+    "www.federalregister.gov": 0.5,
 }
 DEFAULT_DELAY = 0.5
 
@@ -40,7 +44,7 @@ class NotFound(Exception):
 
 
 def get(url: str, *, json_body: dict | None = None, timeout: int = 45,
-        retries: int = 4) -> bytes:
+        retries: int = 4, headers: dict | None = None) -> bytes:
     """Fetch a URL, honouring the per-host rate limit. POSTs if json_body given."""
     host = urllib.parse.urlparse(url).netloc
     delay = RATE_LIMITS.get(host, DEFAULT_DELAY)
@@ -48,13 +52,14 @@ def get(url: str, *, json_body: dict | None = None, timeout: int = 45,
     if since < delay:
         time.sleep(delay - since)
 
-    headers = {"User-Agent": CONTACT, "Accept-Encoding": "gzip, deflate"}
+    request_headers = {"User-Agent": CONTACT, "Accept-Encoding": "gzip, deflate"}
+    request_headers.update(headers or {})
     data = None
     if json_body is not None:
         data = json.dumps(json_body).encode()
-        headers["Content-Type"] = "application/json"
+        request_headers["Content-Type"] = "application/json"
 
-    req = urllib.request.Request(url, data=data, headers=headers)
+    req = urllib.request.Request(url, data=data, headers=request_headers)
 
     last_exc: Exception | None = None
     for attempt in range(retries):

@@ -177,6 +177,31 @@ CREATE TABLE IF NOT EXISTS pac_contribution (
 CREATE INDEX IF NOT EXISTS ix_contrib_recipient ON pac_contribution(recipient_name);
 CREATE INDEX IF NOT EXISTS ix_contrib_contributor ON pac_contribution(contributor_name);
 
+CREATE TABLE IF NOT EXISTS lobby_filing (
+    filing_uuid    TEXT PRIMARY KEY,
+    filing_type    TEXT,
+    filing_year    INTEGER,
+    filing_period  TEXT,
+    registrant     TEXT,
+    client         TEXT,
+    income         REAL,
+    expenses       REAL,
+    posted         TEXT,
+    first_seen     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_lobby_client ON lobby_filing(client);
+
+CREATE TABLE IF NOT EXISTS lobby_activity (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    filing_uuid   TEXT NOT NULL REFERENCES lobby_filing(filing_uuid),
+    issue_code    TEXT,
+    issue_display TEXT,
+    description   TEXT,
+    entities      TEXT,
+    first_seen    TEXT NOT NULL,
+    UNIQUE (filing_uuid, issue_code, description)
+);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     source     TEXT,
     ran_at     TEXT,

@@ -184,6 +184,40 @@ def cmd_fec(args) -> int:
     return 0
 
 
+def cmd_lobbying(args) -> int:
+    from . import lobbying
+
+    conn = db.connect(args.db)
+    if args.import_path:
+        nf, na = lobbying.import_filings_json(conn, args.import_path)
+        print(f"imported {nf} filings / {na} activities from {args.import_path}")
+    elif args.client:
+        nf, na = lobbying.ingest_lobbying(conn, args.client, args.year, args.api_key)
+        print(f"filings -> {nf} new, activities -> {na} new")
+    else:
+        clients = [r["recipient"] for r in conn.execute(
+            "SELECT DISTINCT recipient FROM award WHERE recipient IS NOT NULL LIMIT 25")]
+        if not clients:
+            print("No client given and none found in awards. Use --client.")
+            return 1
+        print(f"Fetching lobbying filings for {len(clients)} award recipients")
+        nf, na = lobbying.ingest_lobbying(conn, clients, args.year, args.api_key)
+        print(f"filings -> {nf} new, activities -> {na} new")
+
+    overlap = lobbying.lobbying_award_overlap(conn)
+    if overlap:
+        print("\nCompanies lobbying an agency that also awards them contracts:")
+        for o in overlap[: args.limit]:
+            print(f"  {o['client']}")
+            print(f"    lobbied '{o['entity_lobbied']}' in {o['lobby_activities']} "
+                  f"activity/activities")
+            print(f"    received ${o['award_total']:,.0f} across {o['award_count']} "
+                  f"award(s) from {o['agency']}")
+        print("\nOverlap is expected and lawful -- a contractor petitions the agency")
+        print("that buys from it. What it measures is dependence on one relationship.")
+    return 0
+
+
 def cmd_rules(args) -> int:
     conn = db.connect(args.db)
     agencies = args.agency
@@ -224,6 +258,7 @@ def cmd_status(args) -> int:
     print(f"  Form 4 txns : {q('SELECT COUNT(*) FROM form4_transaction')}")
     print(f"  Fed Register: {q('SELECT COUNT(*) FROM fedreg_doc')}")
     print(f"  PAC contribs: {q('SELECT COUNT(*) FROM pac_contribution')}")
+    print(f"  Lobby filings: {q('SELECT COUNT(*) FROM lobby_filing')}")
     return 0
 
 
@@ -290,6 +325,16 @@ def build_parser() -> argparse.ArgumentParser:
     fe.add_argument("--import", dest="import_path",
                     help="load contributions from a saved JSON response")
     fe.set_defaults(func=cmd_fec)
+
+    lb = sub.add_parser("lobbying", help="LDA lobbying disclosures")
+    lb.add_argument("--api-key", dest="api_key", help="LDA token (optional)")
+    lb.add_argument("--client", action="append", default=[],
+                    help="client company (repeatable); default: award recipients")
+    lb.add_argument("--year", type=int, default=None)
+    lb.add_argument("--import", dest="import_path",
+                    help="load filings from a saved JSON response")
+    lb.add_argument("--limit", type=int, default=10)
+    lb.set_defaults(func=cmd_lobbying)
 
     st = sub.add_parser("status", help="what's in the database")
     st.set_defaults(func=cmd_status)

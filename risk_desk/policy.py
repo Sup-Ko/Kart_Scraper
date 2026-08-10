@@ -1,6 +1,6 @@
 """Policy exposure — how much of your risk depends on federal contracting.
 
-Joins the federal contract awards collected by ``govdata`` to the positions in
+Joins federal/public contract award data to the positions in
 your portfolio, and answers a question ordinary risk tools do not ask:
 
     what share of my portfolio's **risk** sits in companies whose revenue
@@ -17,7 +17,7 @@ correlated exposure that looks like diversification until the policy changes.
 
 Matching companies to tickers is approximate: no public crosswalk links award
 recipients to listed securities, so it is done by normalized company name using
-the same graded matcher as ``govdata.conflicts``. Supply names via the aliases
+a graded matcher (see ``namematch``). Supply names via the aliases
 file (``--aliases``) or a ``company`` column in the portfolio CSV.
 """
 
@@ -27,6 +27,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
+
+from .namematch import match_score
 
 MIN_MATCH = 0.8  # stricter than conflict review: this feeds a risk number
 
@@ -98,13 +100,6 @@ def analyze_policy_exposure(
     ``report`` is a :class:`~risk_desk.analytics.RiskReport`; its weights and
     component risk contributions drive the exposure shares.
     """
-    try:
-        from govdata.company import match_score
-    except ImportError:  # pragma: no cover - govdata ships alongside risk_desk
-        out = PolicyReport(window_days=window_days)
-        out.notes.append("govdata is not installed; policy exposure unavailable.")
-        return out
-
     aliases = aliases or {}
     companies = companies or {}
     out = PolicyReport(window_days=window_days)

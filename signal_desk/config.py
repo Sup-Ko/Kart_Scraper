@@ -56,10 +56,13 @@ class Config:
     govdata_db: str = "govdata.sqlite"
     govdata_min_amount: float = 0.0
     fedreg_agencies: list[str] = field(default_factory=list)
+    edgar_queries: list[str] = field(default_factory=list)
+    edgar_forms: list[str] = field(default_factory=list)
+    subreddits: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
-        return cls(
+        cfg = cls(
             self=SelfConfig(**(data.get("self") or {})),
             topics=[Topic(**t) for t in data.get("topics", [])],
             feeds=[Feed(**f) for f in data.get("feeds", [])],
@@ -69,7 +72,12 @@ class Config:
             govdata_db=data.get("govdata_db", "govdata.sqlite"),
             govdata_min_amount=float(data.get("govdata_min_amount", 0) or 0),
             fedreg_agencies=list(data.get("fedreg_agencies", [])),
+            edgar_queries=list(data.get("edgar_queries", [])),
+            edgar_forms=list(data.get("edgar_forms", [])),
+            subreddits=list(data.get("subreddits", [])),
         )
+        cfg.feeds.extend(_subreddit_feeds(cfg.subreddits))
+        return cfg
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_CONFIG_PATH) -> "Config":
@@ -79,6 +87,33 @@ class Config:
                 f"No config at {path}. Run `signal-desk init` to create one."
             )
         return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+
+SUBREDDIT_FEED = "https://www.reddit.com/r/{name}/.rss"
+
+
+def _subreddit_feeds(names: list[str]) -> list[Feed]:
+    """Turn subreddit names into ordinary feeds.
+
+    A subreddit exposes a public Atom feed, which the generic RSS collector
+    already handles — so this is a config convenience, not a second fetch path.
+    Reddit asks for a descriptive User-Agent and reasonable request rates, both
+    of which the shared collector already provides. Public feeds only; nothing
+    here touches login-gated content.
+    """
+    feeds = []
+    for raw in names:
+        name = str(raw).strip().lstrip("/").removeprefix("r/").strip("/")
+        if not name:
+            continue
+        feeds.append(Feed(
+            name=f"r/{name}",
+            url=SUBREDDIT_FEED.format(name=name),
+            channel="topic",
+            topic=f"r/{name}",
+            weight=0.7,   # community chatter is weaker evidence than a filing
+        ))
+    return feeds
 
 
 def sample_config_text() -> str:

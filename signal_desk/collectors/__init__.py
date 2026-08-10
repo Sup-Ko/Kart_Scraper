@@ -9,6 +9,7 @@ from __future__ import annotations
 from ..config import Config
 from ..models import Item
 from .base import Collector
+from .edgar import EdgarSearchCollector
 from .fedreg import FederalRegisterCollector
 from .googlenews import GoogleNewsCollector
 from .govawards import GovAwardsCollector
@@ -23,6 +24,7 @@ def build_collectors(config: Config) -> list[Collector]:
         GoogleNewsCollector(config),
         GovAwardsCollector(config),
         FederalRegisterCollector(config),
+        EdgarSearchCollector(config),
     ]
     if config.hibp_api_key and config.self.emails:
         collectors.append(HibpCollector(config))

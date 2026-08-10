@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .advanced import analyze_advanced
 from .analytics import analyze
+from .backtest import backtest_portfolio
 from .bridge import DEFAULT_SIGNAL_DB, load_aliases, load_signals, overlay
 from .factors import analyze_factors
 from .loader import load_portfolio_csv, write_sample_portfolio
@@ -73,6 +74,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             report, series, confidence=args.confidence, sims=args.sims
         )
 
+    # --- backtest: grade the VaR model against realised returns -------------
+    backtest = None
+    if not args.basic:
+        backtest = backtest_portfolio(
+            report, series, confidence=args.confidence, window=args.backtest_window
+        )
+
     # --- policy exposure: federal contract dependence of the portfolio ------
     policy = None
     awards = load_awards(args.govdata, window_days=args.policy_window)
@@ -92,6 +100,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     out = render_cockpit(
         report, results, args.out,
         factors=factors, advanced=advanced, signals=signals, policy=policy,
+        backtest=backtest,
     )
 
     print(f"Portfolio value: {report.base_currency} {report.total_value:,.0f}")
@@ -108,6 +117,12 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"Monte Carlo VaR: {advanced.mc_var*100:.1f}%   "
               f"MC ES: {advanced.mc_es*100:.1f}%   "
               f"EWMA vol: {advanced.ewma_vol_annual*100:.1f}%")
+    if backtest and backtest.results:
+        for r in backtest.results:
+            print(f"Backtest {r.method:11} {r.breaches:3} breaches vs "
+                  f"{r.expected_breaches:5.1f} expected  ({r.breach_rate*100:.1f}%)  "
+                  f"Kupiec p={r.p_value}  {r.verdict}")
+        print(f"Best calibrated: {backtest.best_method}")
     if policy and policy.any_exposure:
         print(f"Policy exposure: {policy.exposed_risk_share*100:.0f}% of risk in "
               f"contract-exposed names ({policy.exposed_value_share*100:.0f}% of value)")
@@ -140,6 +155,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="skip the factor model and Monte Carlo engine")
     p_rep.add_argument("--signals", default=str(DEFAULT_SIGNAL_DB),
                        help="Signal Desk database to overlay news heat from")
+    p_rep.add_argument("--backtest-window", type=int, default=100,
+                       dest="backtest_window",
+                       help="trailing window used to re-estimate VaR when backtesting")
     p_rep.add_argument("--govdata", default="govdata.sqlite",
                        help="govdata database for federal award exposure")
     p_rep.add_argument("--policy-window", type=int, default=365,

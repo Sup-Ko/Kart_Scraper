@@ -281,6 +281,36 @@
   {% if adv.notes %}{% for n in adv.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
   {% endif %}
 
+  {% if bt and bt.results %}
+  <h2>VaR backtest — is the model actually right? <span class="info" title="{{ explain.backtest }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Method</th><th>Days</th><th>Breaches</th><th>Expected</th>
+        <th>Rate</th><th>Kupiec LR</th><th>p-value</th><th>Verdict</th></tr></thead>
+      <tbody>
+        {% for r in bt.results %}
+        <tr>
+          <td class="tick">{{ r.method }}{% if r.method == bt.best_method %} ★{% endif %}</td>
+          <td>{{ r.observations }}</td>
+          <td>{{ r.breaches }}</td>
+          <td>{{ r.expected_breaches }}</td>
+          <td>{{ r.breach_rate | pct }}</td>
+          <td>{{ r.kupiec_lr }}</td>
+          <td>{{ r.p_value }}</td>
+          <td class="{{ 'pos' if r.verdict == 'well calibrated' else 'neg' }}"
+              style="text-align:left">{{ r.verdict }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="sub">At {{ bt.confidence | pct(0) }} confidence, losses should exceed VaR on
+    {{ (1 - bt.confidence) | pct(0) }} of days. ★ = breach rate closest to target.
+    Re-estimated from a trailing {{ bt.window }}-day window at each step, using only
+    data available at that point.</p>
+  {% for n in bt.notes %}<p class="sub">• {{ n }}</p>{% endfor %}
+  {% endif %}
+
   {% if policy and policy.positions %}
   <h2>Policy exposure <span class="info" title="{{ explain.policy_exposure }}">i</span></h2>
   <div class="kpis">

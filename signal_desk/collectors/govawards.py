@@ -72,7 +72,14 @@ class GovAwardsCollector(Collector):
                     url=f"https://www.usaspending.gov/award/{r['award_id']}",
                     summary=(r["description"] or "")[:400],
                     published=published,
-                    meta={"weight": weight, "recipient": recipient, "amount": amount},
+                    meta={
+                        "weight": weight,
+                        "recipient": recipient,
+                        "amount": amount,
+                        # A large award stays material for a long time; the
+                        # default news half-life would score it to zero.
+                        "half_life_hours": 2160,  # ~90 days
+                    },
                 )
             )
         return items

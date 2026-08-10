@@ -29,7 +29,12 @@ def score_item(item: Item, config: Config, now: datetime | None = None) -> float
     now = now or datetime.now(timezone.utc)
     s = config.scoring
 
-    recency = _recency_factor(item.published, s.recency_half_life_hours, now)
+    # Sources decay at very different natural rates. A news story is stale in
+    # days; a $1bn contract award or a proposed rule with an open comment
+    # period stays relevant for months. A single global half-life scores the
+    # slow-moving sources to zero, so a collector may declare its own.
+    half_life = float(item.meta.get("half_life_hours", s.recency_half_life_hours))
+    recency = _recency_factor(item.published, half_life, now)
 
     source_weight = float(item.meta.get("weight", 1.0))
 

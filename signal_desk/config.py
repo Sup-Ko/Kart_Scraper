@@ -55,6 +55,7 @@ class Config:
     hibp_api_key: str = ""
     govdata_db: str = "govdata.sqlite"
     govdata_min_amount: float = 0.0
+    fedreg_agencies: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -67,6 +68,7 @@ class Config:
             hibp_api_key=data.get("hibp_api_key", ""),
             govdata_db=data.get("govdata_db", "govdata.sqlite"),
             govdata_min_amount=float(data.get("govdata_min_amount", 0) or 0),
+            fedreg_agencies=list(data.get("fedreg_agencies", [])),
         )
 
     @classmethod

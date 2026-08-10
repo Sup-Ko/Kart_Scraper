@@ -117,3 +117,34 @@ def test_db_upsert_dedupes(tmp_path):
     rows = db.recent()
     assert rows[0]["url"] == "https://e/x"
     db.close()
+
+
+def test_per_item_half_life_overrides_global():
+    """Slow-moving sources must be able to decay slower than news.
+
+    REGRESSION: with only a global 48h half-life, a 40-day-old contract award
+    scored 0.0 and vanished from the board despite being highly material.
+    """
+    config = Config.from_dict({"scoring": {"recency_half_life_hours": 48}})
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(days=40)
+
+    news = Item(source="n", channel="topic", topic="x", title="t",
+                url="https://e/1", published=old)
+    award = Item(source="a", channel="topic", topic="x", title="t",
+                 url="https://e/2", published=old,
+                 meta={"half_life_hours": 2160})
+
+    score_item(news, config, now=now)
+    score_item(award, config, now=now)
+    assert news.heat < 1.0        # correctly stale under the news half-life
+    assert award.heat > 20.0      # still material under its own half-life
+
+
+def test_default_half_life_still_applies_without_override():
+    config = Config.from_dict({"scoring": {"recency_half_life_hours": 48}})
+    now = datetime.now(timezone.utc)
+    fresh = Item(source="n", channel="topic", topic="x", title="t",
+                 url="https://e/3", published=now)
+    score_item(fresh, config, now=now)
+    assert fresh.heat > 30.0

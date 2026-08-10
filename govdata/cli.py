@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 
 from . import db, sources
+from .fedreg import ingest_federal_register, rules_for_agencies
 from .conflicts import find_conflicts, lag_report
 
 
@@ -25,6 +26,8 @@ def cmd_ingest(args) -> int:
         print(f"EDGAR Form 4 ({args.days}d) -> {sources.backfill_form4(conn, args.days)} new")
     if args.awards or want_all:
         print(f"USASpending awards -> {sources.ingest_awards(conn)} new")
+    if args.fedreg or want_all:
+        print(f"Federal Register   -> {ingest_federal_register(conn)} new")
     return 0
 
 
@@ -119,6 +122,35 @@ def cmd_congress(args) -> int:
     return 0
 
 
+def cmd_rules(args) -> int:
+    conn = db.connect(args.db)
+    agencies = args.agency
+    if not agencies:
+        agencies = [r["awarding_agy"] for r in conn.execute(
+            "SELECT DISTINCT awarding_agy FROM award WHERE awarding_agy IS NOT NULL")]
+        if not agencies:
+            print("No agencies given and none found in awards. "
+                  "Use --agency, or run `govdata ingest --awards` first.")
+            return 1
+        print(f"Agencies from your award data: {', '.join(agencies)}\n")
+
+    rows = rules_for_agencies(conn, agencies, limit=args.limit,
+                              open_comments_only=args.open_comments)
+    if not rows:
+        print("No matching rules. Run `govdata ingest --fedreg` to populate.")
+        return 0
+    for r in rows:
+        kind = "PROPOSED" if r["doc_type"] == "PRORULE" else r["doc_type"]
+        print(f"  [{kind}] {r['title'][:90]}")
+        print(f"    {r['agencies']}  published {r['publication_date']}")
+        if r["comments_close_on"]:
+            print(f"    comments close {r['comments_close_on']}")
+        if r["effective_on"]:
+            print(f"    effective {r['effective_on']}")
+        print(f"    {r['url']}\n")
+    return 0
+
+
 def cmd_status(args) -> int:
     conn = db.connect(args.db)
     q = lambda s: conn.execute(s).fetchone()[0]
@@ -127,6 +159,7 @@ def cmd_status(args) -> int:
     print(f"  Parse issues: {q('SELECT COUNT(*) FROM parse_issue')}")
     print(f"  Form 4      : {q('SELECT COUNT(*) FROM form4')}")
     print(f"  Awards      : {q('SELECT COUNT(*) FROM award')}")
+    print(f"  Fed Register: {q('SELECT COUNT(*) FROM fedreg_doc')}")
     return 0
 
 
@@ -139,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     i.add_argument("--awards", action="store_true")
     i.add_argument("--form4", action="store_true")
     i.add_argument("--ptr", action="store_true")
+    i.add_argument("--fedreg", action="store_true")
     i.add_argument("--days", type=int, default=7, help="Form 4 backfill days")
     i.set_defaults(func=cmd_ingest)
 
@@ -166,6 +200,14 @@ def build_parser() -> argparse.ArgumentParser:
     cg.add_argument("--import", dest="import_path",
                     help="load assignments from a local JSON file instead")
     cg.set_defaults(func=cmd_congress)
+
+    fr = sub.add_parser("rules", help="Federal Register rules by agency")
+    fr.add_argument("--agency", action="append", default=[],
+                    help="agency name (repeatable); default: agencies seen in awards")
+    fr.add_argument("--open-comments", action="store_true", dest="open_comments",
+                    help="only rules whose comment period is still open")
+    fr.add_argument("--limit", type=int, default=20)
+    fr.set_defaults(func=cmd_rules)
 
     st = sub.add_parser("status", help="what's in the database")
     st.set_defaults(func=cmd_status)

@@ -107,6 +107,23 @@ CREATE TABLE IF NOT EXISTS member_committee (
     UNIQUE (bioguide_id, committee, congress)
 );
 
+CREATE TABLE IF NOT EXISTS fedreg_doc (
+    document_number   TEXT PRIMARY KEY,
+    doc_type          TEXT,
+    title             TEXT,
+    abstract          TEXT,
+    agencies          TEXT,
+    rin               TEXT,
+    docket            TEXT,
+    publication_date  TEXT,
+    effective_on      TEXT,
+    comments_close_on TEXT,
+    url               TEXT,
+    first_seen        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_fedreg_pub ON fedreg_doc(publication_date DESC);
+CREATE INDEX IF NOT EXISTS ix_fedreg_type ON fedreg_doc(doc_type);
+
 CREATE TABLE IF NOT EXISTS ingest_log (
     source     TEXT,
     ran_at     TEXT,

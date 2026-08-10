@@ -13,7 +13,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from .advanced import analyze_advanced
 from .analytics import analyze
+from .bridge import DEFAULT_SIGNAL_DB, load_aliases, load_signals, overlay
+from .factors import analyze_factors
 from .loader import load_portfolio_csv, write_sample_portfolio
 from .prices import StooqProvider, load_prices_json, sample_prices
 from .report import render_cockpit
@@ -61,13 +64,43 @@ def cmd_report(args: argparse.Namespace) -> int:
     report = analyze(portfolio, series, benchmark=benchmark, confidence=args.confidence)
     results = [apply_scenario(report, s) for s in default_scenarios()]
 
-    out = render_cockpit(report, results, args.out)
+    # --- advanced engine (factor model + Monte Carlo / VaR attribution) ------
+    factors = advanced = None
+    if not args.basic:
+        factors = analyze_factors(report, series)
+        advanced = analyze_advanced(
+            report, series, confidence=args.confidence, sims=args.sims
+        )
+
+    # --- signal overlay: news heat mapped onto positions --------------------
+    signals = None
+    signal_items = load_signals(args.signals)
+    if signal_items:
+        signals = overlay(report, signal_items, load_aliases(args.aliases))
+
+    out = render_cockpit(
+        report, results, args.out,
+        factors=factors, advanced=advanced, signals=signals,
+    )
+
     print(f"Portfolio value: {report.base_currency} {report.total_value:,.0f}")
     if report.ann_vol is not None:
         print(f"Annualized vol: {report.ann_vol*100:.1f}%   "
               f"VaR({int(args.confidence*100)}%,1d): {report.var_hist*100:.1f}%   "
               f"ES: {report.expected_shortfall*100:.1f}%   "
               f"Max drawdown: {report.max_drawdown*100:.1f}%")
+    if factors and factors.factors:
+        betas = "  ".join(f"β{k} {v:+.2f}" for k, v in factors.portfolio_betas.items())
+        print(f"Factors: {betas}   systematic {factors.systematic_share*100:.0f}% / "
+              f"specific {factors.specific_share*100:.0f}% of variance")
+    if advanced and advanced.mc_var is not None:
+        print(f"Monte Carlo VaR: {advanced.mc_var*100:.1f}%   "
+              f"MC ES: {advanced.mc_es*100:.1f}%   "
+              f"EWMA vol: {advanced.ewma_vol_annual*100:.1f}%")
+    if signals:
+        top = signals[0]
+        print(f"Signal overlay: {len(signal_items)} items; "
+              f"highest attention {top.ticker} ({top.attention})")
     print(f"Wrote cockpit to {out.resolve()}")
     print(f"Open it:  file://{out.resolve()}")
     return 0
@@ -88,6 +121,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("--benchmark", default="SPY", help="benchmark ticker for beta")
     p_rep.add_argument("--confidence", type=float, default=0.95, help="VaR confidence (0-1)")
     p_rep.add_argument("--out", default="cockpit.html", help="output HTML path")
+    p_rep.add_argument("--sims", type=int, default=20000, help="Monte Carlo simulations")
+    p_rep.add_argument("--basic", action="store_true",
+                       help="skip the factor model and Monte Carlo engine")
+    p_rep.add_argument("--signals", default=str(DEFAULT_SIGNAL_DB),
+                       help="Signal Desk database to overlay news heat from")
+    p_rep.add_argument("--aliases",
+                       help="JSON {ticker: [alias,...]} so e.g. AAPL matches 'Apple'")
     p_rep.set_defaults(func=cmd_report)
     return parser
 

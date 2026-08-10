@@ -38,6 +38,9 @@ def render_cockpit(
     report: RiskReport,
     scenarios: list[ScenarioResult],
     out_path: Path | str,
+    factors=None,
+    advanced=None,
+    signals=None,
 ) -> Path:
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
@@ -51,6 +54,9 @@ def render_cockpit(
     html = template.render(
         r=report,
         scenarios=scenarios,
+        f=factors,
+        adv=advanced,
+        signals=signals,
         explain=EXPLAIN,
         generated=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     )

@@ -43,6 +43,43 @@ textbook definitions — audit it yourself.
 - **Stress scenarios** — editable shock sets (2008-style crash, rates +100bp,
   tech selloff, risk-on rally) re-priced against today's market value.
 
+### Advanced risk engine
+
+- **Multi-factor model** — each asset regressed (OLS) on factor returns
+  `rᵢ = αᵢ + Σ βᵢ,f·F_f + εᵢ`, with per-asset betas, R², annualized alpha, and
+  specific volatility. Default proxies: Market (SPY), Rates (TLT), Gold (GLD) —
+  all overridable, because they are *assumptions*, not truth.
+- **Systematic vs specific split** — portfolio variance decomposed into
+  `βᵀΣ_Fβ` (factor-driven) and `Σwᵢ²σ²_ε,ᵢ` (idiosyncratic, diversifiable),
+  plus each factor's share of variance. This says *what kind* of risk you hold.
+- **EWMA volatility** — RiskMetrics λ=0.94, which reacts to regime shifts far
+  faster than an equal-weighted window.
+- **Monte Carlo VaR / ES** — 20,000 simulated days of correlated returns drawn
+  as `μ + L·z`, where `L` is the Cholesky factor of the covariance matrix.
+- **VaR attribution** — marginal (`∂VaR/∂wᵢ`), component (sums exactly to total
+  VaR by Euler's theorem), and **incremental VaR**: how much risk actually
+  leaves if you sell a position. That last one is the question people really
+  have, and it is usually the hardest to get out of a risk system.
+- **Historical replay** — the worst rolling 1/5/20-day windows your holdings
+  genuinely lived through, as the honest complement to hypothetical shocks.
+
+### Signal overlay (bridge to Signal Desk)
+
+If a Signal Desk database is present, the cockpit maps news heat onto the
+positions it affects and ranks by **attention = news heat × that position's
+share of portfolio risk**. A hot story about something carrying 1% of your risk
+should not outrank a warm one about the position driving 40% of it. Matching is
+whole-word (so `GLD` never matches inside `GOLDMAN`) and extensible with a
+`--aliases` file so `AAPL` also matches "Apple".
+
+### On honesty about the model
+
+When a holding is *also* used as a factor proxy, it regresses against itself:
+R²=1 and specific risk 0 — an artifact of the factor choice, not a real absence
+of idiosyncratic risk. The cockpit **detects this and says so** in the factor
+notes. Surfacing a model's own artifacts, instead of letting a suspiciously
+clean number pass as insight, is the whole difference from a black box.
+
 ## Install
 
 From the repo root (Python ≥ 3.11):
@@ -67,6 +104,19 @@ risk-desk report --out cockpit.html
 risk-desk report --prices my_prices.json          # {ticker:{dates,closes}}
 # ...or fetch free daily history from stooq (network required):
 risk-desk report --fetch --benchmark SPY --confidence 0.99
+
+# 4. overlay Signal Desk news onto your positions (aliases so AAPL ~ "Apple"):
+risk-desk report --signals signaldesk.db --aliases aliases.json
+
+# tuning: more/fewer Monte Carlo paths, or skip the advanced engine entirely
+risk-desk report --sims 50000
+risk-desk report --basic
+```
+
+`aliases.json` is simply:
+
+```json
+{ "AAPL": ["Apple"], "MSFT": ["Microsoft", "Azure"], "XOM": ["Exxon"] }
 ```
 
 ### Portfolio format (`portfolio.csv`)
@@ -89,11 +139,15 @@ are git-ignored) — the whole point is that your positions never leave.
 ```
 risk_desk/
   stats.py         pure-Python statistics (returns, cov/corr, VaR z-scores, drawdown)
+  linalg.py        Gaussian elimination, Cholesky, OLS regression
   models.py        Holding / Portfolio / PriceSeries
   prices.py        price providers: sample data, JSON, stooq (free, no key)
   loader.py        portfolio CSV import (open format)
   analytics.py     valuation, risk metrics, risk attribution, exposures (+ EXPLAIN)
+  factors.py       multi-factor model & systematic/specific decomposition
+  advanced.py      EWMA vol, Monte Carlo VaR, VaR attribution, historical replay
   scenarios.py     stress scenarios and P&L
+  bridge.py        Signal Desk news overlay (attention scoring)
   report.py        renders the cockpit HTML
   data/
     cockpit_template.html
@@ -118,8 +172,9 @@ Adding a metric is local to `analytics.py`; add its plain-English formula to
 
 ## Roadmap
 
-- Factor risk model (market / rates / credit / FX betas) with factor-based VaR.
-- Historical scenario replay from real crisis windows.
+- Factor-based VaR and scenario propagation *through* the factor model (shock a
+  factor, not just an asset class).
+- Credit and FX factors; multi-currency portfolios.
 - Efficient-frontier / optimization view.
-- Tie into **Signal Desk**: map live news heat onto your holdings, so risk and
-  what's-happening live on one screen.
+- Backtesting the VaR model itself (Kupiec / breach-count tests) — grading the
+  risk engine's own accuracy, which vendors rarely show you.

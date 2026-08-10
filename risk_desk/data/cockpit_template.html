@@ -171,6 +171,139 @@
   </div>
   {% endif %}
 
+  {% if f and f.factors %}
+  <h2>Factor risk model <span class="info" title="{{ explain.factor_beta }}">i</span></h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Systematic risk <span class="info" title="{{ explain.systematic_vs_specific }}">i</span></div>
+      <div class="val">{{ f.systematic_share | pct(0) }}</div>
+      <div class="foot">σ {{ f.systematic_vol_annual | pct }} — driven by factors</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Specific risk <span class="info" title="{{ explain.systematic_vs_specific }}">i</span></div>
+      <div class="val">{{ f.specific_share | pct(0) }}</div>
+      <div class="foot">σ {{ f.specific_vol_annual | pct }} — diversifiable</div>
+    </div>
+    {% for name, b in f.portfolio_betas.items() %}
+    <div class="kpi">
+      <div class="label">β to {{ name }}</div>
+      <div class="val">{{ "%.2f"|format(b) }}</div>
+      <div class="foot">{{ f.factor_risk_contribution.get(name, 0) }}% of variance</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="scroll" style="margin-top:12px">
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Weight</th>
+        {% for name in f.factors %}<th>β {{ name }}</th>{% endfor %}
+        <th>R²</th><th>Specific σ</th><th>Alpha (ann.)</th>
+      </tr></thead>
+      <tbody>
+        {% for a in f.assets %}
+        <tr>
+          <td class="tick">{{ a.ticker }}</td>
+          <td>{{ a.weight | pct }}</td>
+          {% for name in f.factors %}<td>{{ "%.2f"|format(a.betas.get(name, 0)) }}</td>{% endfor %}
+          <td>{{ "%.2f"|format(a.r_squared) }}</td>
+          <td>{{ a.specific_vol_annual | pct }}</td>
+          <td class="{{ 'pos' if a.alpha >= 0 else 'neg' }}">{{ a.alpha | pct }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if f.notes %}{% for n in f.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
+  {% endif %}
+
+  {% if adv %}
+  <h2>Advanced risk engine</h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">EWMA volatility <span class="info" title="{{ explain.ewma_vol }}">i</span></div>
+      <div class="val">{{ adv.ewma_vol_annual | pct }}</div>
+      <div class="foot">λ=0.94 · VaR {{ adv.ewma_var | pct }}</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Monte Carlo VaR <span class="info" title="{{ explain.monte_carlo_var }}">i</span></div>
+      <div class="val neg">{{ adv.mc_var | pct }}</div>
+      <div class="foot">{{ "{:,}".format(adv.mc_sims) }} sims · ES {{ adv.mc_es | pct }}</div>
+    </div>
+  </div>
+
+  {% if adv.attribution %}
+  <h2>VaR attribution <span class="info" title="{{ explain.component_var }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Ticker</th><th>Weight</th>
+        <th title="{{ explain.marginal_var }}">Marginal VaR</th>
+        <th title="{{ explain.component_var }}">Component VaR</th>
+        <th>% of VaR</th>
+        <th title="{{ explain.incremental_var }}">Incremental VaR if sold</th>
+      </tr></thead>
+      <tbody>
+        {% for a in adv.attribution %}
+        <tr>
+          <td class="tick">{{ a.ticker }}</td>
+          <td>{{ a.weight | pct }}</td>
+          <td>{{ a.marginal_var | pct(2) }}</td>
+          <td>{{ a.component_var | pct(2) }}</td>
+          <td>
+            <span class="barwrap" style="width:70px"><span class="bar" style="width:{{ a.component_pct if a.component_pct > 0 else 0 }}%"></span></span>
+            {{ "%.0f"|format(a.component_pct) }}%
+          </td>
+          <td class="{{ 'pos' if a.incremental_var < 0 else 'neg' }}">{{ a.incremental_var | pct(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if adv.worst_windows %}
+  <h2>Historical replay <span class="info" title="{{ explain.historical_replay }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Horizon</th><th>Worst</th><th>2nd worst</th><th>3rd worst</th></tr></thead>
+      <tbody>
+        {% for h, ws in adv.worst_windows.items() %}
+        <tr>
+          <td>{{ h }}-day</td>
+          {% for w in ws %}<td class="neg">{{ w.ret | pct }}<span class="sub" style="display:block;font-size:11px">{{ w.start }} → {{ w.end }}</span></td>{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if adv.notes %}{% for n in adv.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
+  {% endif %}
+
+  {% if signals %}
+  <h2>Signal overlay — news on what you own <span class="info" title="{{ explain.attention }}">i</span></h2>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Ticker</th><th>Risk share</th><th>News heat</th><th>Items</th><th>Attention</th><th>Top headline</th></tr></thead>
+      <tbody>
+        {% for s in signals %}
+        <tr>
+          <td class="tick">{{ s.ticker }}</td>
+          <td>{{ "%.0f"|format(s.risk_contribution_pct) }}%</td>
+          <td>{{ "%.0f"|format(s.news_heat) }}</td>
+          <td>{{ s.item_count }}</td>
+          <td><b class="{{ 'neg' if s.attention >= 20 else '' }}">{{ "%.0f"|format(s.attention) }}</b></td>
+          <td style="text-align:left;white-space:normal;max-width:380px">
+            {% if s.items %}<a href="{{ s.items[0].url }}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">{{ s.items[0].title }}</a>{% else %}<span class="sub">—</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   {% if scenarios %}
   <h2>Stress scenarios <span class="info" title="Editable shock assumptions applied to today's market value. Illustrative, not predictions.">i</span></h2>
   {% for s in scenarios %}

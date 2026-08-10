@@ -24,6 +24,16 @@ EXPLAIN: dict[str, str] = {
     "max_drawdown": "largest peak-to-trough drop of the portfolio value series.",
     "hhi": "Herfindahl index = Σ(weightᵢ²). 1/HHI is the 'effective number of holdings'.",
     "risk_contribution": "component contribution to volatility: wᵢ·(Σw)ᵢ ÷ σₚ. These sum to total volatility, so you see WHICH positions drive risk — not just that risk exists.",
+    "factor_beta": "each asset's return regressed (OLS) on the factor returns: rᵢ = αᵢ + Σ βᵢ,f·F_f + εᵢ. Portfolio beta to a factor is the weighted sum of asset betas.",
+    "systematic_vs_specific": "portfolio variance split into βᵀΣ_Fβ (systematic — driven by the factors) and Σwᵢ²σ²_ε,ᵢ (specific — idiosyncratic, the part diversification can remove).",
+    "r_squared": "share of an asset's return variance explained by the factors. Low R² means the position moves for its own reasons.",
+    "ewma_vol": "RiskMetrics exponentially weighted volatility (λ=0.94): σ²_t = (1−λ)·Σλᵏ·r²_{t−k}. Reacts to regime change much faster than an equal-weighted window.",
+    "monte_carlo_var": "20,000 simulated days of correlated returns, drawn as μ + L·z where L is the Cholesky factor of the covariance matrix. VaR is read off the simulated loss distribution.",
+    "marginal_var": "∂VaR/∂wᵢ = z·(Σw)ᵢ ÷ σₚ — how much VaR moves if you add a little to this position.",
+    "component_var": "wᵢ × marginal VaR. By Euler's theorem these sum exactly to total VaR — a true attribution of risk to positions.",
+    "incremental_var": "the change in portfolio VaR if this position were sold entirely and the rest renormalized. Negative = selling it reduces risk.",
+    "historical_replay": "the worst rolling 1/5/20-day returns your actual holdings lived through in the sample — real paths, not hypothetical shocks.",
+    "attention": "news heat × that position's share of portfolio risk. Surfaces stories that matter because of what you actually own.",
 }
 
 

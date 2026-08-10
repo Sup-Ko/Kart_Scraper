@@ -57,7 +57,15 @@ def match_score(a: str | None, b: str | None) -> float:
     if na == nb:
         return 1.0
     if na.startswith(nb) or nb.startswith(na):
-        return 0.8
+        # A shared prefix only means something when it accounts for most of
+        # both names. "lockheed martin" vs "lockheed martin aeronautics" is a
+        # real match; "apple" vs "apple valley sanitation district" is not —
+        # the second is a different entity that merely starts the same way.
+        ta, tb = na.split(), nb.split()
+        ratio = min(len(ta), len(tb)) / max(len(ta), len(tb))
+        if ratio >= 0.5:
+            return 0.8
+        return round(0.5 * ratio, 3)
 
     ta, tb = set(na.split()), set(nb.split())
     if not ta or not tb:

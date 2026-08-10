@@ -2,9 +2,11 @@
 
 Expected columns (header row required):
 
-    ticker,quantity,cost_basis,asset_class,sector,currency
+    ticker,quantity,cost_basis,asset_class,sector,currency,company
 
 Only ``ticker`` and ``quantity`` are mandatory; the rest default sensibly.
+``company`` is the legal/company name, used to join external datasets such as
+federal award recipients (see ``policy.py``).
 """
 
 from __future__ import annotations
@@ -30,18 +32,19 @@ def load_portfolio_csv(path: Path | str, name: str = "My Portfolio") -> Portfoli
                     asset_class=(row.get("asset_class") or "Equity").strip(),
                     sector=(row.get("sector") or "Unclassified").strip(),
                     currency=(row.get("currency") or "USD").strip(),
+                    company=(row.get("company") or "").strip(),
                 )
             )
     return Portfolio(name=name, holdings=holdings)
 
 
-SAMPLE_PORTFOLIO_CSV = """ticker,quantity,cost_basis,asset_class,sector,currency
-AAPL,40,150.00,Equity,Technology,USD
-MSFT,25,300.00,Equity,Technology,USD
-JPM,30,140.00,Equity,Financials,USD
-XOM,50,95.00,Equity,Energy,USD
-TLT,60,98.00,Bond,Government,USD
-GLD,20,175.00,Commodity,Metals,USD
+SAMPLE_PORTFOLIO_CSV = """ticker,quantity,cost_basis,asset_class,sector,currency,company
+AAPL,40,150.00,Equity,Technology,USD,Apple Inc
+MSFT,25,300.00,Equity,Technology,USD,Microsoft Corporation
+JPM,30,140.00,Equity,Financials,USD,JPMorgan Chase
+XOM,50,95.00,Equity,Energy,USD,Exxon Mobil Corporation
+TLT,60,98.00,Bond,Government,USD,
+GLD,20,175.00,Commodity,Metals,USD,
 """
 
 

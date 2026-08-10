@@ -120,3 +120,79 @@ def test_low_history_degrades_gracefully():
     assert r.total_value == 1010.0
     assert r.ann_vol is None  # not enough data
     assert any("Not enough" in n for n in r.notes)
+
+
+# ---- policy exposure --------------------------------------------------------
+
+def _policy_report():
+    from risk_desk.analytics import analyze
+    from risk_desk.models import Holding, Portfolio
+    from risk_desk.prices import sample_prices
+    p = Portfolio(holdings=[
+        Holding("MSFT", 25, 300, "Equity", "Technology", company="Microsoft Corporation"),
+        Holding("AAPL", 40, 150, "Equity", "Technology", company="Apple Inc"),
+        Holding("GLD", 20, 175, "Commodity", "Metals"),
+    ])
+    s = sample_prices()
+    return analyze(p, s, benchmark=s.get("SPY"))
+
+
+def test_policy_exposure_matches_by_company_name():
+    from risk_desk.policy import analyze_policy_exposure
+    awards = [
+        {"recipient": "MICROSOFT CORPORATION", "awarding_agy": "Department of Defense",
+         "amount": 9.0e8, "action_date": "2025-06-01"},
+        {"recipient": "SOME UNRELATED VENDOR LLC", "awarding_agy": "GSA",
+         "amount": 1.0e7, "action_date": "2025-06-01"},
+    ]
+    pol = analyze_policy_exposure(_policy_report(), awards)
+    by = {p.ticker: p for p in pol.positions}
+    assert by["MSFT"].exposed and by["MSFT"].award_count == 1
+    assert by["MSFT"].award_total == 9.0e8
+    assert not by["AAPL"].exposed          # no matching award
+    assert not by["GLD"].exposed           # no company name at all
+    assert pol.exposed_risk_share > 0
+    assert "Department of Defense" in pol.by_agency
+
+
+def test_policy_exposure_reports_risk_share_not_just_value():
+    """Risk share and value share are computed independently."""
+    from risk_desk.policy import analyze_policy_exposure
+    awards = [{"recipient": "MICROSOFT CORPORATION", "awarding_agy": "DoD",
+               "amount": 5.0e8, "action_date": "2025-06-01"}]
+    pol = analyze_policy_exposure(_policy_report(), awards)
+    assert 0.0 < pol.exposed_value_share < 1.0
+    assert 0.0 < pol.exposed_risk_share < 1.0
+    # the exposed set's risk share equals the sum of its component risk shares
+    exposed = [p for p in pol.positions if p.exposed]
+    assert abs(pol.exposed_risk_share
+               - sum(p.risk_contribution_pct for p in exposed) / 100.0) < 1e-6
+
+
+def test_policy_exposure_empty_awards_is_graceful():
+    from risk_desk.policy import analyze_policy_exposure
+    pol = analyze_policy_exposure(_policy_report(), [])
+    assert not pol.any_exposure
+    assert pol.exposed_risk_share == 0.0
+    assert any("govdata ingest" in n for n in pol.notes)
+
+
+def test_policy_exposure_requires_strong_name_match():
+    """A weak name resemblance must not create phantom exposure."""
+    from risk_desk.policy import analyze_policy_exposure
+    awards = [{"recipient": "APPLE VALLEY SANITATION DISTRICT",
+               "awarding_agy": "EPA", "amount": 1e7, "action_date": "2025-06-01"}]
+    pol = analyze_policy_exposure(_policy_report(), awards)
+    by = {p.ticker: p for p in pol.positions}
+    assert not by["AAPL"].exposed
+
+
+def test_loader_reads_company_column(tmp_path):
+    from risk_desk.loader import load_portfolio_csv
+    csv_path = tmp_path / "p.csv"
+    csv_path.write_text(
+        "ticker,quantity,cost_basis,asset_class,sector,currency,company\n"
+        "LMT,10,400,Equity,Defense,USD,Lockheed Martin Corporation\n",
+        encoding="utf-8")
+    p = load_portfolio_csv(csv_path)
+    assert p.holdings[0].company == "Lockheed Martin Corporation"

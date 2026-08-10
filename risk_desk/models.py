@@ -19,6 +19,7 @@ class Holding:
     asset_class: str = "Equity"
     sector: str = "Unclassified"
     currency: str = "USD"
+    company: str = ""  # legal/company name, for joining external datasets
 
 
 @dataclass

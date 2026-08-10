@@ -387,3 +387,13 @@ def test_congress_ingest_without_key_is_a_noop(tmp_path, monkeypatch):
     assert congress.ingest_committee_assignments(conn) == 0
     assert not congress.have_key()
     conn.close()
+
+
+def test_match_score_rejects_weak_shared_prefix():
+    """REGRESSION: 'Apple Inc' must not match 'Apple Valley Sanitation District'.
+
+    A shared prefix is only meaningful when it accounts for most of both names.
+    """
+    assert match_score("Apple Inc", "APPLE VALLEY SANITATION DISTRICT") < 0.6
+    # but a genuine subsidiary-style prefix still matches
+    assert match_score("Lockheed Martin Corp", "LOCKHEED MARTIN AERONAUTICS CO") >= 0.8

@@ -281,6 +281,52 @@
   {% if adv.notes %}{% for n in adv.notes %}<p class="sub">• {{ n }}</p>{% endfor %}{% endif %}
   {% endif %}
 
+  {% if policy and policy.positions %}
+  <h2>Policy exposure <span class="info" title="{{ explain.policy_exposure }}">i</span></h2>
+  <div class="kpis">
+    <div class="kpi">
+      <div class="label">Risk in contract-exposed names</div>
+      <div class="val {{ 'warn' if policy.exposed_risk_share >= 0.3 else '' }}">{{ policy.exposed_risk_share | pct(0) }}</div>
+      <div class="foot">vs {{ policy.exposed_value_share | pct(0) }} of portfolio value</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Federal awards observed</div>
+      <div class="val">{{ policy.total_awards | money }}</div>
+      <div class="foot">last {{ policy.window_days }} days</div>
+    </div>
+    {% for agency, amt in policy.by_agency.items() %}{% if loop.index <= 2 %}
+    <div class="kpi">
+      <div class="label">{{ agency }}</div>
+      <div class="val">{{ amt | money }}</div>
+      <div class="foot">awarded to names you hold</div>
+    </div>
+    {% endif %}{% endfor %}
+  </div>
+
+  {% if policy.any_exposure %}
+  <div class="scroll" style="margin-top:12px">
+    <table>
+      <thead><tr><th>Ticker</th><th>Company</th><th>Weight</th><th>Risk share</th>
+        <th>Awards</th><th>Award total</th><th>Top agency</th></tr></thead>
+      <tbody>
+        {% for p in policy.positions %}{% if p.exposed %}
+        <tr>
+          <td class="tick">{{ p.ticker }}</td>
+          <td style="text-align:left">{{ p.company }}</td>
+          <td>{{ p.weight | pct }}</td>
+          <td>{{ "%.0f"|format(p.risk_contribution_pct) }}%</td>
+          <td>{{ p.award_count }}</td>
+          <td>{{ p.award_total | money }}</td>
+          <td style="text-align:left">{{ (p.agencies.keys()|list|first) or "—" }}</td>
+        </tr>
+        {% endif %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% for n in policy.notes %}<p class="sub">• {{ n }}</p>{% endfor %}
+  {% endif %}
+
   {% if signals %}
   <h2>Signal overlay — news on what you own <span class="info" title="{{ explain.attention }}">i</span></h2>
   <div class="scroll">

@@ -18,6 +18,7 @@ from .analytics import analyze
 from .bridge import DEFAULT_SIGNAL_DB, load_aliases, load_signals, overlay
 from .factors import analyze_factors
 from .loader import load_portfolio_csv, write_sample_portfolio
+from .policy import analyze_policy_exposure, load_awards
 from .prices import StooqProvider, load_prices_json, sample_prices
 from .report import render_cockpit
 from .scenarios import apply_scenario, default_scenarios
@@ -72,6 +73,16 @@ def cmd_report(args: argparse.Namespace) -> int:
             report, series, confidence=args.confidence, sims=args.sims
         )
 
+    # --- policy exposure: federal contract dependence of the portfolio ------
+    policy = None
+    awards = load_awards(args.govdata, window_days=args.policy_window)
+    if awards or Path(args.govdata).exists():
+        companies = {h.ticker: h.company for h in portfolio.holdings if h.company}
+        policy = analyze_policy_exposure(
+            report, awards, aliases=load_aliases(args.aliases),
+            companies=companies, window_days=args.policy_window,
+        )
+
     # --- signal overlay: news heat mapped onto positions --------------------
     signals = None
     signal_items = load_signals(args.signals)
@@ -80,7 +91,7 @@ def cmd_report(args: argparse.Namespace) -> int:
 
     out = render_cockpit(
         report, results, args.out,
-        factors=factors, advanced=advanced, signals=signals,
+        factors=factors, advanced=advanced, signals=signals, policy=policy,
     )
 
     print(f"Portfolio value: {report.base_currency} {report.total_value:,.0f}")
@@ -97,6 +108,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"Monte Carlo VaR: {advanced.mc_var*100:.1f}%   "
               f"MC ES: {advanced.mc_es*100:.1f}%   "
               f"EWMA vol: {advanced.ewma_vol_annual*100:.1f}%")
+    if policy and policy.any_exposure:
+        print(f"Policy exposure: {policy.exposed_risk_share*100:.0f}% of risk in "
+              f"contract-exposed names ({policy.exposed_value_share*100:.0f}% of value)")
     if signals:
         top = signals[0]
         print(f"Signal overlay: {len(signal_items)} items; "
@@ -126,6 +140,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="skip the factor model and Monte Carlo engine")
     p_rep.add_argument("--signals", default=str(DEFAULT_SIGNAL_DB),
                        help="Signal Desk database to overlay news heat from")
+    p_rep.add_argument("--govdata", default="govdata.sqlite",
+                       help="govdata database for federal award exposure")
+    p_rep.add_argument("--policy-window", type=int, default=365,
+                       dest="policy_window", help="award lookback window in days")
     p_rep.add_argument("--aliases",
                        help="JSON {ticker: [alias,...]} so e.g. AAPL matches 'Apple'")
     p_rep.set_defaults(func=cmd_report)

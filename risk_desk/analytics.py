@@ -33,6 +33,7 @@ EXPLAIN: dict[str, str] = {
     "component_var": "wᵢ × marginal VaR. By Euler's theorem these sum exactly to total VaR — a true attribution of risk to positions.",
     "incremental_var": "the change in portfolio VaR if this position were sold entirely and the rest renormalized. Negative = selling it reduces risk.",
     "historical_replay": "the worst rolling 1/5/20-day returns your actual holdings lived through in the sample — real paths, not hypothetical shocks.",
+    "policy_exposure": "share of portfolio RISK (not just value) held in companies with federal contract awards in the lookback window. Risk share is the honest measure: a small position driving large volatility is a bigger policy bet than a large quiet one.",
     "attention": "news heat × that position's share of portfolio risk. Surfaces stories that matter because of what you actually own.",
 }
 
@@ -47,6 +48,7 @@ class PositionView:
     pnl: float
     asset_class: str
     sector: str
+    company: str = ""  # carried from the holding, for external dataset joins
     risk_contribution_pct: float = 0.0
 
 
@@ -116,6 +118,7 @@ def analyze(
                 pnl=(price - h.cost_basis) * h.quantity if price else 0.0,
                 asset_class=h.asset_class,
                 sector=h.sector,
+                company=h.company,
             )
         )
 

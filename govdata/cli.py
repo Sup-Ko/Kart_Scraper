@@ -122,6 +122,33 @@ def cmd_congress(args) -> int:
     return 0
 
 
+def cmd_insiders(args) -> int:
+    conn = db.connect(args.db)
+    if args.fetch:
+        filings, rows = sources.parse_form4_details(conn, args.fetch)
+        print(f"parsed {filings} Form 4 filings -> {rows} transactions\n")
+
+    summary = sources.insider_summary(conn, days=args.days,
+                                      symbols=args.symbol or None)
+    if not summary:
+        print("No Form 4 transactions. Run:")
+        print("  govdata ingest --form4        # index recent filings")
+        print("  govdata insiders --fetch 50   # fetch and parse their details")
+        return 0
+
+    print(f"Insider activity, last {args.days} days")
+    print("Discretionary = open-market buys/sells only. Grants, option exercises")
+    print("and tax withholding are counted separately: they are compensation")
+    print("mechanics, not an expression of view.\n")
+    print(f"  {'sym':<6} {'net disc.':>14} {'bought':>14} {'sold':>14} "
+          f"{'mechanical':>14} {'ppl':>4}")
+    for r in summary[: args.limit]:
+        print(f"  {r['issuer_symbol']:<6} {r['net_discretionary']:>14,.0f} "
+              f"{r['bought'] or 0:>14,.0f} {r['sold'] or 0:>14,.0f} "
+              f"{r['mechanical'] or 0:>14,.0f} {r['insiders']:>4}")
+    return 0
+
+
 def cmd_rules(args) -> int:
     conn = db.connect(args.db)
     agencies = args.agency
@@ -159,6 +186,7 @@ def cmd_status(args) -> int:
     print(f"  Parse issues: {q('SELECT COUNT(*) FROM parse_issue')}")
     print(f"  Form 4      : {q('SELECT COUNT(*) FROM form4')}")
     print(f"  Awards      : {q('SELECT COUNT(*) FROM award')}")
+    print(f"  Form 4 txns : {q('SELECT COUNT(*) FROM form4_transaction')}")
     print(f"  Fed Register: {q('SELECT COUNT(*) FROM fedreg_doc')}")
     return 0
 
@@ -208,6 +236,15 @@ def build_parser() -> argparse.ArgumentParser:
                     help="only rules whose comment period is still open")
     fr.add_argument("--limit", type=int, default=20)
     fr.set_defaults(func=cmd_rules)
+
+    ins = sub.add_parser("insiders", help="Form 4 insider transactions")
+    ins.add_argument("--fetch", type=int, metavar="N",
+                     help="fetch and parse detail for N unparsed filings first")
+    ins.add_argument("--days", type=int, default=90)
+    ins.add_argument("--symbol", action="append", default=[],
+                     help="restrict to ticker(s), repeatable")
+    ins.add_argument("--limit", type=int, default=20)
+    ins.set_defaults(func=cmd_insiders)
 
     st = sub.add_parser("status", help="what's in the database")
     st.set_defaults(func=cmd_status)

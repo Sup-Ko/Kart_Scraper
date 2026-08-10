@@ -240,3 +240,101 @@ def ingest_awards(conn: sqlite3.Connection, since: date | None = None,
     conn.commit()
     db.log(conn, "usaspending", new)
     return new
+
+
+# --- 4. SEC Form 4 detail (transaction-level) -------------------------------
+
+def save_form4_filing(conn: sqlite3.Connection, filing) -> int:
+    """Persist a parsed Form 4's transactions. Idempotent via row hash."""
+    import hashlib
+
+    from .form4_parse import is_discretionary
+
+    now = db.now_iso()
+    new = 0
+    for t in filing.transactions:
+        basis = (f"{filing.accession}|{t.security}|{t.tx_date}|{t.tx_code}|"
+                 f"{t.shares}|{t.price}|{t.is_derivative}")
+        row_hash = hashlib.sha1(basis.encode("utf-8")).hexdigest()[:16]
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO form4_transaction
+               (row_hash, accession, issuer_symbol, issuer_name, owner_name, role,
+                security, tx_date, tx_code, tx_type, discretionary, shares, price,
+                value, acquired_disposed, is_derivative, first_seen)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (row_hash, filing.accession, filing.issuer_symbol, filing.issuer_name,
+             filing.owner_name, filing.role, t.security, t.tx_date, t.tx_code,
+             t.tx_type, 1 if is_discretionary(t.tx_code) else 0, t.shares, t.price,
+             t.value, t.acquired_disposed, 1 if t.is_derivative else 0, now),
+        )
+        new += cur.rowcount
+    conn.commit()
+    return new
+
+
+def parse_form4_details(conn: sqlite3.Connection, limit: int = 50) -> tuple[int, int]:
+    """Fetch and parse unparsed Form 4 submissions. Returns (filings, rows)."""
+    from .form4_parse import parse_form4
+
+    rows = conn.execute(
+        "SELECT accession, url FROM form4 WHERE parsed = 0 "
+        "ORDER BY filed_date DESC LIMIT ?", (limit,)
+    ).fetchall()
+
+    filings = added = 0
+    for r in rows:
+        try:
+            payload = http.get(r["url"]).decode("utf-8", "replace")
+        except Exception:
+            # mark as attempted so a permanently broken filing cannot wedge
+            # the queue, the same discipline the PTR pipeline uses
+            conn.execute("UPDATE form4 SET parsed = -1 WHERE accession = ?",
+                         (r["accession"],))
+            continue
+
+        filing = parse_form4(payload, r["accession"])
+        if filing is None:
+            conn.execute("UPDATE form4 SET parsed = -1 WHERE accession = ?",
+                         (r["accession"],))
+            continue
+
+        added += save_form4_filing(conn, filing)
+        filings += 1
+        conn.execute("UPDATE form4 SET parsed = 1 WHERE accession = ?",
+                     (r["accession"],))
+    conn.commit()
+    db.log(conn, "form4_detail", added, f"{filings} filings")
+    return filings, added
+
+
+def insider_summary(conn: sqlite3.Connection, days: int = 90,
+                    symbols: list[str] | None = None) -> list[dict]:
+    """Net insider activity per issuer, separating decisions from mechanics.
+
+    Grants, option exercises and tax withholding are reported apart from
+    open-market buys and sells, because blending them produces headline numbers
+    that mean nothing.
+    """
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    q = """SELECT issuer_symbol,
+                  SUM(CASE WHEN discretionary=1 AND acquired_disposed='A'
+                           THEN value ELSE 0 END) AS bought,
+                  SUM(CASE WHEN discretionary=1 AND acquired_disposed='D'
+                           THEN value ELSE 0 END) AS sold,
+                  SUM(CASE WHEN discretionary=0 THEN value ELSE 0 END) AS mechanical,
+                  COUNT(DISTINCT owner_name) AS insiders,
+                  COUNT(*) AS transactions
+           FROM form4_transaction
+           WHERE tx_date >= ? AND issuer_symbol IS NOT NULL AND issuer_symbol != ''"""
+    params: list = [cutoff]
+    if symbols:
+        q += " AND issuer_symbol IN (%s)" % ",".join("?" * len(symbols))
+        params.extend(s.upper() for s in symbols)
+    q += " GROUP BY issuer_symbol ORDER BY (bought - sold) DESC"
+
+    out = []
+    for r in conn.execute(q, params):
+        d = dict(r)
+        d["net_discretionary"] = round((d["bought"] or 0) - (d["sold"] or 0), 2)
+        out.append(d)
+    return out

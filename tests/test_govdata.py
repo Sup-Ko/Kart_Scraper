@@ -397,3 +397,40 @@ def test_match_score_rejects_weak_shared_prefix():
     assert match_score("Apple Inc", "APPLE VALLEY SANITATION DISTRICT") < 0.6
     # but a genuine subsidiary-style prefix still matches
     assert match_score("Lockheed Martin Corp", "LOCKHEED MARTIN AERONAUTICS CO") >= 0.8
+
+
+def test_migration_adds_column_to_preexisting_table(tmp_path):
+    """REGRESSION: a DB created before form4.parsed existed must still open.
+
+    CREATE TABLE IF NOT EXISTS leaves an existing table untouched, so a new
+    column (and any index over it) fails on databases from an earlier version.
+    """
+    import sqlite3
+    path = tmp_path / "old.sqlite"
+
+    # simulate the previous schema: form4 without the 'parsed' column
+    old = sqlite3.connect(str(path))
+    old.execute("""CREATE TABLE form4 (accession TEXT PRIMARY KEY, cik TEXT,
+                   company TEXT, filed_date TEXT, url TEXT, first_seen TEXT)""")
+    old.execute("INSERT INTO form4 VALUES ('A1','123','ACME','2026-01-01','u','now')")
+    old.commit()
+    old.close()
+
+    conn = db.connect(path)          # must not raise
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(form4)")}
+    assert "parsed" in cols
+    # existing rows are preserved and default to unparsed
+    row = conn.execute("SELECT accession, parsed FROM form4").fetchone()
+    assert row["accession"] == "A1" and row["parsed"] == 0
+    conn.close()
+
+
+def test_connect_is_idempotent(tmp_path):
+    """Opening the same database repeatedly must be safe."""
+    path = tmp_path / "g.sqlite"
+    for _ in range(3):
+        conn = db.connect(path)
+        conn.close()
+    conn = db.connect(path)
+    assert conn.execute("SELECT COUNT(*) FROM form4").fetchone()[0] == 0
+    conn.close()

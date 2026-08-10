@@ -68,8 +68,34 @@ CREATE TABLE IF NOT EXISTS form4 (
     company      TEXT,
     filed_date   TEXT,
     url          TEXT,
+    parsed       INTEGER NOT NULL DEFAULT 0,
     first_seen   TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS ix_form4_parsed ON form4(parsed);
+
+CREATE TABLE IF NOT EXISTS form4_transaction (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    row_hash        TEXT NOT NULL UNIQUE,
+    accession       TEXT NOT NULL,
+    issuer_symbol   TEXT,
+    issuer_name     TEXT,
+    owner_name      TEXT,
+    role            TEXT,
+    security        TEXT,
+    tx_date         TEXT,
+    tx_code         TEXT,
+    tx_type         TEXT,
+    discretionary   INTEGER DEFAULT 0,
+    shares          REAL,
+    price           REAL,
+    value           REAL,
+    acquired_disposed TEXT,
+    is_derivative   INTEGER DEFAULT 0,
+    first_seen      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_f4tx_symbol ON form4_transaction(issuer_symbol);
+CREATE INDEX IF NOT EXISTS ix_f4tx_date ON form4_transaction(tx_date DESC);
+CREATE INDEX IF NOT EXISTS ix_f4tx_disc ON form4_transaction(discretionary);
 
 CREATE TABLE IF NOT EXISTS award (
     award_id       TEXT PRIMARY KEY,
@@ -144,9 +170,38 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# Columns added to tables that shipped earlier. ``CREATE TABLE IF NOT EXISTS``
+# silently leaves an existing table alone, so a new column — and any index over
+# it — fails against a database created by a previous version. These are applied
+# before the schema script runs.
+MIGRATIONS: tuple[tuple[str, str, str], ...] = (
+    ("form4", "parsed", "INTEGER NOT NULL DEFAULT 0"),
+)
+
+
+def _migrate(conn: sqlite3.Connection) -> list[str]:
+    """Add any missing columns to pre-existing tables. Returns what changed."""
+    applied = []
+    for table, column, decl in MIGRATIONS:
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if not exists:
+            continue  # the schema script will create it complete
+        columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column in columns:
+            continue
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        applied.append(f"{table}.{column}")
+    if applied:
+        conn.commit()
+    return applied
+
+
 def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
+    _migrate(conn)
     conn.executescript(SCHEMA)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.commit()

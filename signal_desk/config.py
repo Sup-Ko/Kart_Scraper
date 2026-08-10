@@ -53,6 +53,8 @@ class Config:
     priority_keywords: list[str] = field(default_factory=list)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     hibp_api_key: str = ""
+    govdata_db: str = "govdata.sqlite"
+    govdata_min_amount: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
@@ -63,6 +65,8 @@ class Config:
             priority_keywords=list(data.get("priority_keywords", [])),
             scoring=ScoringConfig(**(data.get("scoring") or {})),
             hibp_api_key=data.get("hibp_api_key", ""),
+            govdata_db=data.get("govdata_db", "govdata.sqlite"),
+            govdata_min_amount=float(data.get("govdata_min_amount", 0) or 0),
         )
 
     @classmethod

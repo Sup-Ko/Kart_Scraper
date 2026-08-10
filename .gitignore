@@ -34,3 +34,8 @@ portfolio.csv
 
 # Caches
 .cache/
+
+# govdata local data (public records, but large/regenerable)
+govdata.sqlite
+govdata.sqlite-*
+cache/

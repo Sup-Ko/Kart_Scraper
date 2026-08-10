@@ -10,6 +10,7 @@ from ..config import Config
 from ..models import Item
 from .base import Collector
 from .googlenews import GoogleNewsCollector
+from .govawards import GovAwardsCollector
 from .hibp import HibpCollector
 from .rss import RssCollector
 
@@ -19,6 +20,7 @@ def build_collectors(config: Config) -> list[Collector]:
     collectors: list[Collector] = [
         RssCollector(config),
         GoogleNewsCollector(config),
+        GovAwardsCollector(config),
     ]
     if config.hibp_api_key and config.self.emails:
         collectors.append(HibpCollector(config))
